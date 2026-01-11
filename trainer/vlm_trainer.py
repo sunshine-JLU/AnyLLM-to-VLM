@@ -533,7 +533,8 @@ class VLMTrainer:
             print(f"检查点不存在: {checkpoint_path}")
             return
         
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        # 使用 weights_only=False 以支持包含自定义类的检查点（PyTorch 2.6+ 默认需要）
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         
         # 加载模型状态
         model_to_load = self.model.module if self.is_distributed else self.model

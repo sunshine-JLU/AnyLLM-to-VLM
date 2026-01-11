@@ -35,7 +35,8 @@ def load_model_from_checkpoint(checkpoint_path: str, model_config: ModelConfig, 
     model.to(device)
     
     # 加载检查点
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    # 使用 weights_only=False 以支持包含自定义类的检查点（PyTorch 2.6+ 默认需要）
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     # 加载模型状态
     if 'model_state_dict' in checkpoint:
