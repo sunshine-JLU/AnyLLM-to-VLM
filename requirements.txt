@@ -1,4 +1,4 @@
-torch>=2.0.0
+torch>=2.6.0
 torchvision>=0.15.0
 transformers>=4.35.0
 datasets>=2.14.0
@@ -12,3 +12,4 @@ accelerate>=0.25.0
 matplotlib>=3.7.0
 modelscope
 nvitop
+protobuf
