@@ -34,6 +34,9 @@ Follow these steps to get started quickly:
    ```bash
    python train_vlm.py --config configs/vlm_pretrain.yaml --stage pretrain
    # python train_vlm.py --config configs/vlm_pretrain.yaml --stage pretrain | tee pretrain.log
+   # In a new terminal, type `nvitop` :
+<img width="2082" height="262" alt="image" src="https://github.com/user-attachments/assets/c31f97ee-b334-4934-a7cb-977276f4c2a9" />
+
 5. **Run the Supervised Fine-Tuning Script**
    ```bash
    python train_vlm.py --config configs/vlm_sft.yaml --stage sft
