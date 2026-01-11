@@ -83,12 +83,13 @@ class MLPProjection(BaseProjection):
         batch_size, num_patches, vision_dim = image_embeddings.shape
         
         # 重塑为 [batch_size * num_patches, vision_dim]
-        x = image_embeddings.view(-1, vision_dim)
+        # 使用reshape而不是view，因为它可以处理非连续张量
+        x = image_embeddings.reshape(-1, vision_dim)
         
         # 通过投影层
         x = self.projection(x)
         
         # 重塑回 [batch_size, num_patches, language_dim]
-        x = x.view(batch_size, num_patches, self.language_dim)
+        x = x.reshape(batch_size, num_patches, self.language_dim)
         
         return x
