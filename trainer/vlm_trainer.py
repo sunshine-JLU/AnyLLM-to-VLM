@@ -8,8 +8,12 @@ from contextlib import nullcontext
 from tqdm import tqdm
 import os
 import math
-from typing import Optional, Dict, Any
+import json
+from typing import Optional, Dict, Any, List
 import wandb
+import matplotlib
+matplotlib.use('Agg')  # 使用非交互式后端，适合服务器环境
+import matplotlib.pyplot as plt
 
 from data.parquet_dataset import ParquetMultiModalDataset, DataCollator
 from model.vlm_model import MultiModalVLM
@@ -183,6 +187,10 @@ class VLMTrainer:
         self.global_step = 0
         self.best_val_loss = float('inf')
         
+        # 损失记录：存储 (step, loss) 元组
+        self.train_loss_history: List[tuple] = []  # [(step, loss), ...]
+        self.val_loss_history: List[tuple] = []  # [(step, val_loss), ...]
+        
         if self._is_main_process():
             print("训练器初始化完成")
             print(f"每个epoch步数: {len(self.train_loader)}")
@@ -310,6 +318,13 @@ class VLMTrainer:
                 current_loss = loss.item() * self.config.accumulation_steps
                 total_loss += current_loss
                 
+                # 计算当前全局步数
+                current_global_step = self.global_step + step
+                
+                # 记录损失到历史（只在主进程记录）
+                if self._is_main_process():
+                    self.train_loss_history.append((current_global_step, current_loss))
+                
                 # 更新进度条
                 avg_loss = total_loss / (step + 1)
                 pbar.set_postfix({
@@ -322,7 +337,7 @@ class VLMTrainer:
                     wandb.log({
                         "train_loss": current_loss,
                         "learning_rate": lr,
-                        "step": self.global_step + step
+                        "step": current_global_step
                     })
                 
                 # 定期保存检查点
@@ -423,6 +438,10 @@ class VLMTrainer:
         
         avg_loss = total_loss / max(1, total_samples)
         
+        # 记录验证损失到历史（只在主进程记录）
+        if self._is_main_process():
+            self.val_loss_history.append((self.global_step, avg_loss))
+        
         # 记录到wandb
         if self.use_wandb and self._is_main_process():
             wandb.log({"val_loss": avg_loss})
@@ -489,6 +508,10 @@ class VLMTrainer:
             print(f"最佳验证损失: {self.best_val_loss:.4f}")
             print(f"模型保存在: {self.config.save_dir}")
             print("="*50)
+            
+            # 保存损失数据并绘制曲线图
+            self.save_loss_history()
+            self.plot_loss_curve()
     
     def save_checkpoint(self, epoch: int, step: int = 0, is_best: bool = False):
         """保存检查点"""
@@ -559,6 +582,66 @@ class VLMTrainer:
             print(f"  恢复epoch: {self.current_epoch}")
             print(f"  恢复step: {self.global_step}")
             print(f"  最佳验证损失: {self.best_val_loss:.4f}")
+    
+    def save_loss_history(self):
+        """保存损失历史到JSON文件"""
+        if not self._is_main_process():
+            return
+        
+        # 准备数据
+        loss_data = {
+            "train_loss": [{"step": step, "loss": loss} for step, loss in self.train_loss_history],
+            "val_loss": [{"step": step, "loss": loss} for step, loss in self.val_loss_history]
+        }
+        
+        # 保存到JSON文件
+        loss_file = os.path.join(self.config.save_dir, "loss_history.json")
+        with open(loss_file, 'w', encoding='utf-8') as f:
+            json.dump(loss_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"损失历史已保存到: {loss_file}")
+        print(f"  训练损失记录数: {len(self.train_loss_history)}")
+        print(f"  验证损失记录数: {len(self.val_loss_history)}")
+    
+    def plot_loss_curve(self):
+        """绘制损失曲线图"""
+        if not self._is_main_process():
+            return
+        
+        if not self.train_loss_history:
+            print("警告: 没有训练损失数据，无法绘制曲线图")
+            return
+        
+        # 创建图形
+        plt.figure(figsize=(12, 6))
+        
+        # 提取训练损失数据
+        train_steps = [step for step, _ in self.train_loss_history]
+        train_losses = [loss for _, loss in self.train_loss_history]
+        
+        # 绘制训练损失曲线
+        plt.plot(train_steps, train_losses, label='训练损失', color='blue', alpha=0.7, linewidth=1.5)
+        
+        # 如果有验证损失，也绘制验证损失曲线
+        if self.val_loss_history:
+            val_steps = [step for step, _ in self.val_loss_history]
+            val_losses = [loss for _, loss in self.val_loss_history]
+            plt.plot(val_steps, val_losses, label='验证损失', color='red', alpha=0.7, linewidth=1.5, marker='o', markersize=4)
+        
+        # 设置图形属性
+        plt.xlabel('训练步数 (Step)', fontsize=12)
+        plt.ylabel('损失值 (Loss)', fontsize=12)
+        plt.title('训练损失曲线', fontsize=14, fontweight='bold')
+        plt.legend(fontsize=11)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        # 保存图片
+        plot_file = os.path.join(self.config.save_dir, "loss_curve.png")
+        plt.savefig(plot_file, dpi=300, bbox_inches='tight')
+        plt.close()  # 关闭图形以释放内存
+        
+        print(f"损失曲线图已保存到: {plot_file}")
 
 
 def train_vlm(
