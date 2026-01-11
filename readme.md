@@ -39,3 +39,9 @@ Follow these steps to get started quickly:
    python train_vlm.py --config configs/vlm_sft.yaml --stage sft
    # python train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log
 7. **Eval the model**
+
+
+
+
+### Acknowledgments  
+This project was inspired by [jingyaogong/minimind-v](https://github.com/jingyaogong/minimind-v). We extend our thanks for its open-source contribution, which provided valuable inspiration and support for our development.
