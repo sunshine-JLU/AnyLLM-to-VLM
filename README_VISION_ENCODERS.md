@@ -140,7 +140,7 @@ VisionEncoderFactory.register('dinov2', DINOv2VisionEncoder)
 ```yaml
 model:
   vision_model_type: "dinov2"  # 使用新编码器
-  vision_model_path: "../multimodal-vlm/models/dinov2-base"
+  vision_model_path: "./models/dinov2-base"
   freeze_vision_encoder: true
   vision_layers_to_unfreeze: 0
   # ... 其他配置
@@ -163,25 +163,25 @@ model:
 ### 1. CLIP (已实现)
 ```yaml
 vision_model_type: "clip"
-vision_model_path: "../multimodal-vlm/models/clip-vit-base-patch16"
+vision_model_path: "./models/clip-vit-base-patch16"
 ```
 
 ### 2. ViT (示例已提供)
 ```yaml
 vision_model_type: "vit"
-vision_model_path: "../multimodal-vlm/models/vit-base-patch16-224"
+vision_model_path: "./models/vit-base-patch16-224"
 ```
 
 ### 3. DINOv2 (需要实现)
 ```yaml
 vision_model_type: "dinov2"
-vision_model_path: "../multimodal-vlm/models/dinov2-base"
+vision_model_path: "./models/dinov2-base"
 ```
 
 ### 4. BLIP (需要实现)
 ```yaml
 vision_model_type: "blip"
-vision_model_path: "../multimodal-vlm/models/blip-base"
+vision_model_path: "./models/blip-base"
 ```
 
 ## 注意事项
@@ -201,7 +201,7 @@ from model.vision_encoders import VisionEncoderFactory
 # 创建编码器
 encoder = VisionEncoderFactory.create(
     encoder_type='dinov2',
-    model_path='../multimodal-vlm/models/dinov2-base',
+    model_path='./models/dinov2-base',
     freeze=True,
     vision_layers_to_unfreeze=0
 )
