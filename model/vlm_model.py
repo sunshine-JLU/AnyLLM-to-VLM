@@ -4,22 +4,37 @@ from typing import Optional, Tuple, List, Union
 import warnings
 import math
 
-from transformers import CLIPModel, CLIPProcessor, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# 导入视觉编码器模块
+try:
+    from .vision_encoders import VisionEncoderFactory
+except ImportError:
+    # 如果相对导入失败，尝试绝对导入
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from model.vision_encoders import VisionEncoderFactory
+
+# 导入语言模型模块
+try:
+    from .language_models import LanguageModelFactory
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from model.language_models import LanguageModelFactory
+
+# 导入投影层模块
+try:
+    from .projections import ProjectionFactory
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from model.projections import ProjectionFactory
 
 warnings.filterwarnings('ignore')
-
-
-class VisionProj(nn.Module):
-    """视觉投影层"""
-    def __init__(self, vision_dim: int = 768, hidden_size: int = 512):
-        super().__init__()
-        self.vision_proj = nn.Sequential(
-            nn.Linear(vision_dim, hidden_size),
-            nn.LayerNorm(hidden_size)
-        )
-    
-    def forward(self, image_embeddings: torch.Tensor) -> torch.Tensor:
-        return self.vision_proj(image_embeddings)
 
 
 class MultiModalVLM(nn.Module):
@@ -30,33 +45,40 @@ class MultiModalVLM(nn.Module):
         self.config = config
         
         print(f"从本地路径加载视觉模型: {config.vision_model_path}")
-        # 视觉编码器
-        self.vision_encoder, self.processor = self._load_vision_model(
-            config.vision_model_path,
-            freeze=config.freeze_vision_encoder
+        print(f"视觉编码器类型: {config.vision_model_type}")
+        # 视觉编码器（使用工厂模式）
+        self.vision_encoder = self._load_vision_model(
+            encoder_type=config.vision_model_type,
+            model_path=config.vision_model_path,
+            freeze=config.freeze_vision_encoder,
+            vision_layers_to_unfreeze=config.vision_layers_to_unfreeze
         )
         
         print(f"从本地路径加载语言模型: {config.language_model_path}")
-        # 语言模型
+        print(f"语言模型类型: {config.language_model_type}")
+        # 语言模型（使用工厂模式）
         self.language_model = self._load_language_model(
-            config.language_model_path,
-            freeze=config.freeze_language_model
+            model_type=config.language_model_type,
+            model_path=config.language_model_path,
+            freeze=config.freeze_language_model,
+            layers_to_unfreeze=config.language_layers_to_unfreeze,
+            use_bfloat16=config.use_bfloat16
         )
         
-        # 投影层
-        vision_dim = 768  # CLIP base的hidden size
-        if hasattr(self.vision_encoder.vision_model.config, 'hidden_size'):
-            vision_dim = self.vision_encoder.vision_model.config.hidden_size
+        # 投影层（使用工厂模式）
+        vision_dim = self.vision_encoder.hidden_size
+        language_dim = self.language_model.hidden_size
         
-        language_dim = self.language_model.config.hidden_size
-        
-        self.vision_proj = VisionProj(
+        print(f"创建投影层: {config.projection_type}")
+        self.vision_proj = self._load_projection(
+            projection_type=config.projection_type,
             vision_dim=vision_dim,
-            hidden_size=language_dim
+            language_dim=language_dim,
+            hidden_dim=config.projection_hidden_dim,
+            activation=config.projection_activation,
+            dropout=config.projection_dropout,
+            layernorm=config.projection_layernorm
         )
-        # 投影层始终可训练
-        for param in self.vision_proj.parameters():
-            param.requires_grad = True
         
         # 图像特殊token
         self.image_special_token = config.image_special_token
@@ -74,157 +96,116 @@ class MultiModalVLM(nn.Module):
         print(f"  语言模型维度: {language_dim}")
         print(f"  图像特殊token: {self.image_special_token[:20]}...")
     
-    def _load_vision_model(self, model_path: str, freeze: bool = True):
-        """加载视觉模型"""
+    def _load_vision_model(
+        self,
+        encoder_type: str,
+        model_path: str,
+        freeze: bool = True,
+        vision_layers_to_unfreeze: int = 0
+    ):
+        """
+        加载视觉模型（使用工厂模式）
+        
+        Args:
+            encoder_type: 编码器类型（如 'clip', 'vit', 'dinov2'）
+            model_path: 模型路径
+            freeze: 是否冻结参数
+            vision_layers_to_unfreeze: 解冻后几层
+        
+        Returns:
+            视觉编码器实例
+        """
         try:
-            model = CLIPModel.from_pretrained(model_path)
-            processor = CLIPProcessor.from_pretrained(model_path, use_fast=False)
-            
-            if freeze:
-                for param in model.parameters():
-                    param.requires_grad = False
-                print(f"  视觉模型已冻结")
-            else:
-                print(f"  视觉模型可训练")
-            
-            return model, processor
+            encoder = VisionEncoderFactory.create(
+                encoder_type=encoder_type,
+                model_path=model_path,
+                freeze=freeze,
+                vision_layers_to_unfreeze=vision_layers_to_unfreeze
+            )
+            print(f"  视觉编码器加载成功: {encoder_type}")
+            return encoder
         except Exception as e:
             print(f"加载视觉模型失败: {e}")
+            print(f"可用的编码器类型: {VisionEncoderFactory.list_encoders()}")
             raise
     
-    def _load_language_model(self, model_path: str, freeze: bool = False):
-        """加载语言模型"""
+    def _load_language_model(
+        self,
+        model_type: str,
+        model_path: str,
+        freeze: bool = False,
+        layers_to_unfreeze: int = 0,
+        use_bfloat16: bool = True
+    ):
+        """
+        加载语言模型（使用工厂模式）
+        
+        Args:
+            model_type: 模型类型（如 'qwen', 'llama', 'gpt'）
+            model_path: 模型路径
+            freeze: 是否冻结参数
+            layers_to_unfreeze: 解冻后几层
+            use_bfloat16: 是否使用bfloat16
+        
+        Returns:
+            语言模型实例
+        """
         try:
-            # 根据配置选择数据类型
-            dtype = torch.bfloat16 if self.config.use_bfloat16 else torch.float32
-            
-            # 尝试使用正确的参数名
-            model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                trust_remote_code=True,
-                dtype=dtype,  # 使用dtype而不是torch_dtype
-                low_cpu_mem_usage=True
+            model = LanguageModelFactory.create(
+                model_type=model_type,
+                model_path=model_path,
+                freeze=freeze,
+                layers_to_unfreeze=layers_to_unfreeze,
+                use_bfloat16=use_bfloat16
             )
-            
-            # 根据配置设置可训练参数
-            if freeze:
-                # 完全冻结
-                for param in model.parameters():
-                    param.requires_grad = False
-                print(f"  语言模型已完全冻结")
-            else:
-                # 先冻结所有参数
-                for param in model.parameters():
-                    param.requires_grad = False
-                
-                # 根据language_layers_to_unfreeze配置解冻后几层
-                layers_to_unfreeze = self.config.language_layers_to_unfreeze
-                
-                # 获取transformer层（不同模型可能有不同的结构）
-                if hasattr(model, 'model') and hasattr(model.model, 'layers'):
-                    # Qwen等模型结构
-                    layers = model.model.layers
-                    num_layers = len(layers)
-                    
-                    if layers_to_unfreeze > 0:
-                        # 解冻后几层
-                        start_layer = max(0, num_layers - layers_to_unfreeze)
-                        for i in range(start_layer, num_layers):
-                            for param in layers[i].parameters():
-                                param.requires_grad = True
-                        print(f"  语言模型解冻后 {layers_to_unfreeze} 层 (层 {start_layer} 到 {num_layers-1})")
-                    else:
-                        print(f"  语言模型所有层已冻结")
-                    
-                    # 解冻embedding层（如果添加了新token，需要训练）
-                    if hasattr(model.model, 'embed_tokens'):
-                        for param in model.model.embed_tokens.parameters():
-                            param.requires_grad = True
-                        print(f"  语言模型embedding层已解冻")
-                    
-                    # 解冻输出层（lm_head）
-                    if hasattr(model, 'lm_head'):
-                        for param in model.lm_head.parameters():
-                            param.requires_grad = True
-                        print(f"  语言模型输出层(lm_head)已解冻")
-                    
-                elif hasattr(model, 'transformer') and hasattr(model.transformer, 'h'):
-                    # GPT-2等模型结构
-                    layers = model.transformer.h
-                    num_layers = len(layers)
-                    
-                    if layers_to_unfreeze > 0:
-                        start_layer = max(0, num_layers - layers_to_unfreeze)
-                        for i in range(start_layer, num_layers):
-                            for param in layers[i].parameters():
-                                param.requires_grad = True
-                        print(f"  语言模型解冻后 {layers_to_unfreeze} 层 (层 {start_layer} 到 {num_layers-1})")
-                    else:
-                        print(f"  语言模型所有层已冻结")
-                    
-                    # 解冻embedding和输出层
-                    if hasattr(model.transformer, 'wte'):
-                        for param in model.transformer.wte.parameters():
-                            param.requires_grad = True
-                    if hasattr(model, 'lm_head'):
-                        for param in model.lm_head.parameters():
-                            param.requires_grad = True
-                            
-                else:
-                    # 未知结构，尝试找到embedding和输出层
-                    # 尝试解冻embedding层
-                    if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
-                        for param in model.model.embed_tokens.parameters():
-                            param.requires_grad = True
-                        print(f"  语言模型embedding层已解冻")
-                    elif hasattr(model, 'transformer') and hasattr(model.transformer, 'wte'):
-                        for param in model.transformer.wte.parameters():
-                            param.requires_grad = True
-                        print(f"  语言模型embedding层已解冻")
-                    
-                    # 尝试解冻输出层
-                    if hasattr(model, 'lm_head'):
-                        for param in model.lm_head.parameters():
-                            param.requires_grad = True
-                        print(f"  语言模型输出层(lm_head)已解冻")
-                    
-                    # 如果layers_to_unfreeze > 0，尝试解冻所有参数
-                    if layers_to_unfreeze > 0:
-                        for param in model.parameters():
-                            param.requires_grad = True
-                        print(f"  警告: 未知模型结构，解冻所有参数")
-                    else:
-                        print(f"  语言模型transformer层已冻结（未知结构）")
-            
+            print(f"  语言模型加载成功: {model_type}")
             return model
         except Exception as e:
             print(f"加载语言模型失败: {e}")
-            # 尝试不同的加载方式
-            try:
-                model = AutoModelForCausalLM.from_pretrained(
-                    model_path,
-                    trust_remote_code=True
-                )
-                # 应用相同的冻结逻辑
-                if freeze:
-                    for param in model.parameters():
-                        param.requires_grad = False
-                else:
-                    for param in model.parameters():
-                        param.requires_grad = False
-                    layers_to_unfreeze = self.config.language_layers_to_unfreeze
-                    if layers_to_unfreeze > 0:
-                        if hasattr(model, 'model') and hasattr(model.model, 'layers'):
-                            layers = model.model.layers
-                            num_layers = len(layers)
-                            start_layer = max(0, num_layers - layers_to_unfreeze)
-                            for i in range(start_layer, num_layers):
-                                for param in layers[i].parameters():
-                                    param.requires_grad = True
-                return model
-            except Exception as e2:
-                print(f"再次尝试加载失败: {e2}")
-                raise
+            print(f"可用的模型类型: {LanguageModelFactory.list_models()}")
+            raise
+    
+    def _load_projection(
+        self,
+        projection_type: str,
+        vision_dim: int,
+        language_dim: int,
+        hidden_dim: Optional[int] = None,
+        activation: str = "gelu",
+        dropout: float = 0.1,
+        layernorm: bool = True
+    ):
+        """
+        加载投影层（使用工厂模式）
+        
+        Args:
+            projection_type: 投影层类型（如 'mlp', 'linear'）
+            vision_dim: 视觉编码器维度
+            language_dim: 语言模型维度
+            hidden_dim: 隐藏层维度
+            activation: 激活函数
+            dropout: dropout率
+            layernorm: 是否使用LayerNorm
+        
+        Returns:
+            投影层实例
+        """
+        try:
+            projection = ProjectionFactory.create(
+                projection_type=projection_type,
+                vision_dim=vision_dim,
+                language_dim=language_dim,
+                hidden_dim=hidden_dim,
+                activation=activation,
+                dropout=dropout,
+                layernorm=layernorm
+            )
+            print(f"  投影层加载成功: {projection_type}")
+            return projection
+        except Exception as e:
+            print(f"加载投影层失败: {e}")
+            print(f"可用的投影层类型: {ProjectionFactory.list_projections()}")
+            raise
     
     def _add_image_special_token(self):
         """添加图像特殊token"""
@@ -237,14 +218,16 @@ class MultiModalVLM(nn.Module):
             tokenizer.add_special_tokens(special_tokens_dict)
             
             # 调整语言模型的嵌入层大小
-            self.language_model.resize_token_embeddings(len(tokenizer))
+            if hasattr(self.language_model.model, 'resize_token_embeddings'):
+                self.language_model.model.resize_token_embeddings(len(tokenizer))
+            else:
+                # 如果模型没有resize_token_embeddings方法，尝试直接访问
+                print(f"  警告: 模型没有resize_token_embeddings方法，可能需要手动调整")
             
             # 确保embedding层可训练（如果添加了新token，需要训练新的embedding）
-            if hasattr(self.language_model, 'model') and hasattr(self.language_model.model, 'embed_tokens'):
-                for param in self.language_model.model.embed_tokens.parameters():
-                    param.requires_grad = True
-            elif hasattr(self.language_model, 'transformer') and hasattr(self.language_model.transformer, 'wte'):
-                for param in self.language_model.transformer.wte.parameters():
+            embedding_layer = self.language_model.get_embedding_layer()
+            if embedding_layer is not None:
+                for param in embedding_layer.parameters():
                     param.requires_grad = True
             
             # 获取token id
@@ -301,13 +284,16 @@ class MultiModalVLM(nn.Module):
         return inputs
     
     def get_image_embeddings(self, pixel_values: torch.Tensor) -> torch.Tensor:
-        """获取图像嵌入"""
-        with torch.no_grad():
-            outputs = self.vision_encoder.vision_model(pixel_values=pixel_values)
+        """
+        获取图像嵌入（使用视觉编码器的统一接口）
         
-        # 使用patch embeddings（去掉CLS token）
-        img_embedding = outputs.last_hidden_state[:, 1:, :]  # [batch_size, 196, 768]
-        return img_embedding
+        Args:
+            pixel_values: 图像tensor [batch_size, channels, height, width]
+        
+        Returns:
+            图像嵌入 [batch_size, num_patches, hidden_size]
+        """
+        return self.vision_encoder.get_image_embeddings(pixel_values)
     
     def count_vision_proj(self, tokens: torch.Tensor, h: torch.Tensor, 
                          vision_tensors: Optional[torch.Tensor] = None,
@@ -417,20 +403,134 @@ class MultiModalVLM(nn.Module):
     
     def get_tokenizer(self):
         """获取tokenizer"""
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(
-                self.config.language_model_path,
-                trust_remote_code=True
-            )
-            
-            if tokenizer.pad_token is None:
-                tokenizer.pad_token = tokenizer.eos_token
-            
-            return tokenizer
-        except Exception as e:
-            print(f"加载tokenizer失败: {e}")
-            raise
+        return self.language_model.tokenizer
     
     def get_processor(self):
         """获取图像处理器"""
-        return self.processor
+        return self.vision_encoder.processor
+    
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        pixel_values: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        **kwargs
+    ):
+        """生成文本"""
+        batch_size, seq_length = input_ids.shape
+        
+        # 获取文本嵌入
+        embedding_layer = self.language_model.get_embedding_layer()
+        if embedding_layer is not None:
+            hidden_states = embedding_layer(input_ids)
+        else:
+            if hasattr(self.language_model.model, 'embed_tokens'):
+                hidden_states = self.language_model.model.embed_tokens(input_ids)
+            else:
+                raise ValueError("无法找到embedding层")
+        
+        # 处理图像
+        if pixel_values is not None and self.image_token_ids is not None:
+            # 获取图像嵌入
+            vision_tensors = self.get_image_embeddings(pixel_values)
+            
+            # 替换图像token为视觉特征
+            hidden_states = self.count_vision_proj(
+                tokens=input_ids,
+                h=hidden_states,
+                vision_tensors=vision_tensors,
+                seqlen=seq_length
+            )
+        
+        # 使用语言模型的generate方法
+        # 注意：这里我们需要使用inputs_embeds，但transformers的generate可能不支持
+        # 所以我们需要手动实现生成逻辑，或者使用language_model的generate
+        # 为了简化，我们直接调用language_model的generate，但需要先处理图像
+        
+        # 由于generate方法通常需要input_ids，我们需要一个workaround
+        # 这里我们使用language_model的generate，但图像信息已经在hidden_states中
+        # 实际上，更好的方法是直接使用language_model.generate，但传入处理过的inputs_embeds
+        
+        # 临时方案：直接使用language_model的generate
+        # 但这样会丢失图像信息，所以我们需要修改策略
+        
+        # 更好的方案：手动实现生成循环
+        return self._generate_with_vision(
+            input_ids=input_ids,
+            pixel_values=pixel_values,
+            attention_mask=attention_mask,
+            **kwargs
+        )
+    
+    def _generate_with_vision(
+        self,
+        input_ids: torch.Tensor,
+        pixel_values: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        max_new_tokens: int = 512,
+        do_sample: bool = True,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        **kwargs
+    ):
+        """带视觉信息的生成方法"""
+        from torch.nn.functional import softmax
+        
+        self.eval()
+        generated_ids = input_ids.clone()
+        
+        with torch.no_grad():
+            for _ in range(max_new_tokens):
+                # 前向传播
+                outputs = self.forward(
+                    input_ids=generated_ids,
+                    pixel_values=pixel_values,
+                    attention_mask=attention_mask
+                )
+                
+                # 获取下一个token的logits
+                next_token_logits = outputs.logits[:, -1, :]
+                
+                # 应用采样策略
+                if do_sample:
+                    if temperature > 0:
+                        next_token_logits = next_token_logits / temperature
+                    
+                    # Top-p采样
+                    if top_p < 1.0:
+                        sorted_logits, sorted_indices = torch.sort(next_token_logits, descending=True)
+                        cumulative_probs = torch.cumsum(softmax(sorted_logits, dim=-1), dim=-1)
+                        
+                        # 移除累积概率超过top_p的tokens
+                        sorted_indices_to_remove = cumulative_probs > top_p
+                        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                        sorted_indices_to_remove[..., 0] = 0
+                        
+                        indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                        next_token_logits[indices_to_remove] = float('-inf')
+                    
+                    probs = softmax(next_token_logits, dim=-1)
+                    next_token = torch.multinomial(probs, num_samples=1)
+                else:
+                    # 贪婪解码
+                    next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+                
+                # 添加到生成的序列
+                generated_ids = torch.cat([generated_ids, next_token], dim=1)
+                
+                # 更新attention mask
+                if attention_mask is not None:
+                    attention_mask = torch.cat([
+                        attention_mask,
+                        torch.ones((attention_mask.size(0), 1), device=attention_mask.device, dtype=attention_mask.dtype)
+                    ], dim=1)
+                else:
+                    attention_mask = torch.ones_like(generated_ids)
+                
+                # 检查是否到达结束token
+                tokenizer = self.get_tokenizer()
+                eos_token_id = tokenizer.eos_token_id if tokenizer.eos_token_id is not None else tokenizer.pad_token_id
+                if next_token.item() == eos_token_id:
+                    break
+        
+        return generated_ids
