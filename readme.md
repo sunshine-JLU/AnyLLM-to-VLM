@@ -7,7 +7,7 @@ Turn any text-only LLM into a Vision-Language Model through efficient training.
 - 🦙 Compatible with popular LLMs (Qwen, LLaMA, etc.)
 
 ## Guidance
-- Project Scalability Guide :`README_EXTENSIBILITY.md`
+- Project Scalability Guide :[`README_EXTENSIBILITY.md`](https://github.com/sunshine-JLU/AnyLLM-to-VLM/blob/main/README_EXTENSIBILITY.md)
 - How to change a new vision encoder :`QUICK_START_VISION_ENCODERS.md`
 - more details concerning vision encoder :`README_VISION_ENCODERS.md`
 
