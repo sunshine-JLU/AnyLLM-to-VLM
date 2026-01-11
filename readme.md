@@ -39,7 +39,8 @@ Follow these steps to get started quickly:
    python train_vlm.py --config configs/vlm_sft.yaml --stage sft
    # python train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log
 7. **Eval the model**
-
+   ```bash
+   python eval_vlm.py --checkpoint ./checkpoints/sft/best_model.pt --config configs/vlm_sft.yaml --mode generate --image ./sample.jpg --question "描述这张图片" --max_new_tokens 512
 
 
 
