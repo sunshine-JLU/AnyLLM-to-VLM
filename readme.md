@@ -42,10 +42,11 @@ Follow these steps to get started quickly:
    ```bash
    python train_vlm.py --config configs/vlm_sft.yaml --stage sft
    # python train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log
-7. **Eval the model**
+6. **Eval the model**
    ```bash
    python eval_vlm.py --checkpoint ./checkpoints/sft/best_model.pt --config configs/vlm_sft.yaml --mode generate --image ./sample.jpg --question "描述这张图片" --max_new_tokens 512
-
+7. **Test HardWare Environment**
+<img width="1290" height="332" alt="76be5859-27b6-4cd6-941c-e1ef95b769cc" src="https://github.com/user-attachments/assets/50496cc7-417a-42f1-8f44-a6e555c09cca" />
 
 
 ### Acknowledgments  
