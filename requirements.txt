@@ -11,3 +11,4 @@ pyyaml>=6.0
 accelerate>=0.25.0
 matplotlib>=3.7.0
 modelscope
+nvitop
