@@ -6,6 +6,11 @@ Turn any text-only LLM into a Vision-Language Model through efficient training.
 - 📷 Support for CLIP and other vision encoders
 - 🦙 Compatible with popular LLMs (Qwen, LLaMA, etc.)
 
+## Guidance
+- Project Scalability Guide :`README_EXTENSIBILITY.md`
+- How to change a new vision encoder :`QUICK_START_VISION_ENCODERS.md`
+- more details concerning vision encoder :`README_VISION_ENCODERS.md`
+
 ## Quick Start
 
 Follow these steps to get started quickly:
