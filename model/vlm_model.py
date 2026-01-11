@@ -332,6 +332,10 @@ class MultiModalVLM(nn.Module):
         # 投影视觉特征
         vision_proj = self.vision_proj(vision_tensors)
         
+        # 确保投影后的特征与hidden_states的数据类型一致
+        if vision_proj.dtype != h.dtype:
+            vision_proj = vision_proj.to(dtype=h.dtype)
+        
         # 替换图像token
         batch_size = h.size(0)
         new_h = []

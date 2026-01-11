@@ -5,7 +5,14 @@
 
 from typing import Dict, Type, Optional
 from .base import BaseLanguageModel
-from .qwen_model import QwenLanguageModel
+from .qwen3_model import Qwen3LanguageModel
+
+# 向后兼容：保留旧的导入（如果存在）
+try:
+    from .qwen_model import QwenLanguageModel
+except ImportError:
+    # 如果旧文件不存在，使用新类作为别名
+    QwenLanguageModel = Qwen3LanguageModel
 
 
 class LanguageModelFactory:
@@ -83,7 +90,11 @@ class LanguageModelFactory:
 
 
 # 自动注册内置模型
-LanguageModelFactory.register('qwen', QwenLanguageModel)
+# 注册 'qwen3' 作为主要名称
+LanguageModelFactory.register('qwen3', Qwen3LanguageModel)
+
+# 向后兼容：同时注册 'qwen' 名称
+LanguageModelFactory.register('qwen', Qwen3LanguageModel)
 
 # 可以在这里注册更多模型
 # LanguageModelFactory.register('llama', LLaMALanguageModel)

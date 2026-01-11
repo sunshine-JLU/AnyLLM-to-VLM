@@ -5,7 +5,7 @@ model:
   freeze_vision_encoder: true
   vision_layers_to_unfreeze: 0
   
-  language_model_type: "qwen"
+  language_model_type: "qwen3"  # 使用 'qwen3' 或 'qwen' 都可以，支持所有Qwen3系列模型（0.5B, 0.6B, 1.5B, 2B, 7B等）
   language_model_path: "../multimodal-vlm/models/Qwen3-0.6B"
   freeze_language_model: false
   language_layers_to_unfreeze: 0  # SFT阶段可以解冻更多层，或设置为0只训练投影层和输出层
