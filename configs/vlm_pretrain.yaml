@@ -1,11 +1,11 @@
 model:
   vision_model_type: "clip"
-  vision_model_path: "../multimodal-vlm/models/clip-vit-base-patch16"
+  vision_model_path: "./models/clip-vit-base-patch16"
   freeze_vision_encoder: true
   vision_layers_to_unfreeze: 0
   
   language_model_type: "qwen3"  # 使用 'qwen3' 或 'qwen' 都可以，支持所有Qwen3系列模型（0.5B, 0.6B, 1.5B, 2B, 7B等）
-  language_model_path: "../multimodal-vlm/models/Qwen3-0.6B"
+  language_model_path: "./models/Qwen3-0.6B"
   freeze_language_model: false
   language_layers_to_unfreeze: 2  # 解冻后2层transformer层进行训练，设置为0则只训练投影层、embedding和输出层
   
@@ -22,14 +22,14 @@ model:
 
 training:
   stage: "pretrain"
-  batch_size: 8
+  batch_size: 10
   num_epochs: 1
   learning_rate: 4e-4
   warmup_steps: 1000
   weight_decay: 0.01
   grad_clip: 1.0
   
-  data_path: "../multimodal-vlm/dataset/pretrain_data.parquet"
+  data_path: "./dataset/pretrain_data.parquet"
   max_seq_length: 640
   
   accumulation_steps: 1
