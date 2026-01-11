@@ -14,7 +14,7 @@
 ```yaml
 model:
   vision_model_type: "clip"
-  vision_model_path: "../multimodal-vlm/models/clip-vit-base-patch16"
+  vision_model_path: "./models/clip-vit-base-patch16"
   freeze_vision_encoder: true
   vision_layers_to_unfreeze: 0
 ```
@@ -26,7 +26,7 @@ model:
 ```yaml
 model:
   vision_model_type: "vit"  # 改为你想要的编码器类型
-  vision_model_path: "../multimodal-vlm/models/vit-base-patch16-224"
+  vision_model_path: "./models/vit-base-patch16-224"
   freeze_vision_encoder: true
   vision_layers_to_unfreeze: 0
 ```
