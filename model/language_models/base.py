@@ -127,12 +127,16 @@ class BaseLanguageModel(ABC, nn.Module):
     
     def get_embedding_layer(self):
         """获取embedding层"""
+        # 尝试多种可能的路径
         if hasattr(self.model, 'model') and hasattr(self.model.model, 'embed_tokens'):
             return self.model.model.embed_tokens
         elif hasattr(self.model, 'transformer') and hasattr(self.model.transformer, 'wte'):
             return self.model.transformer.wte
         elif hasattr(self.model, 'embed_tokens'):
             return self.model.embed_tokens
+        elif hasattr(self.model, 'get_input_embeddings'):
+            # 某些模型可能有get_input_embeddings方法
+            return self.model.get_input_embeddings()
         return None
     
     def forward(self, *args, **kwargs):
