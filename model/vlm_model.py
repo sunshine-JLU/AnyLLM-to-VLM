@@ -369,7 +369,17 @@ class MultiModalVLM(nn.Module):
         batch_size, seq_length = input_ids.shape
         
         # 获取文本嵌入
-        hidden_states = self.language_model.model.embed_tokens(input_ids)
+        embedding_layer = self.language_model.get_embedding_layer()
+        if embedding_layer is not None:
+            hidden_states = embedding_layer(input_ids)
+        else:
+            # 回退方案：尝试直接访问
+            if hasattr(self.language_model.model, 'model') and hasattr(self.language_model.model.model, 'embed_tokens'):
+                hidden_states = self.language_model.model.model.embed_tokens(input_ids)
+            elif hasattr(self.language_model.model, 'embed_tokens'):
+                hidden_states = self.language_model.model.embed_tokens(input_ids)
+            else:
+                raise ValueError("无法找到embedding层，请检查模型结构")
         
         # 处理图像
         if pixel_values is not None and self.image_token_ids is not None:

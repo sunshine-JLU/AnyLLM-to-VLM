@@ -109,17 +109,30 @@ class QwenLanguageModel(BaseLanguageModel):
     def unfreeze_embedding_and_output(self):
         """解冻embedding层和输出层"""
         # 解冻embedding层
-        if hasattr(self.model, 'model') and hasattr(self.model.model, 'embed_tokens'):
-            for param in self.model.model.embed_tokens.parameters():
+        embedding_layer = self.get_embedding_layer()
+        if embedding_layer is not None:
+            for param in embedding_layer.parameters():
                 param.requires_grad = True
             print(f"  Qwen语言模型embedding层已解冻")
-        elif hasattr(self.model, 'transformer') and hasattr(self.model.transformer, 'wte'):
-            for param in self.model.transformer.wte.parameters():
-                param.requires_grad = True
-            print(f"  Qwen语言模型embedding层已解冻")
+        else:
+            # 尝试其他路径
+            if hasattr(self.model, 'model') and hasattr(self.model.model, 'embed_tokens'):
+                for param in self.model.model.embed_tokens.parameters():
+                    param.requires_grad = True
+                print(f"  Qwen语言模型embedding层已解冻")
+            elif hasattr(self.model, 'transformer') and hasattr(self.model.transformer, 'wte'):
+                for param in self.model.transformer.wte.parameters():
+                    param.requires_grad = True
+                print(f"  Qwen语言模型embedding层已解冻")
         
         # 解冻输出层
         if hasattr(self.model, 'lm_head'):
             for param in self.model.lm_head.parameters():
                 param.requires_grad = True
             print(f"  Qwen语言模型输出层(lm_head)已解冻")
+        elif hasattr(self.model, 'get_output_embeddings'):
+            output_layer = self.model.get_output_embeddings()
+            if output_layer is not None:
+                for param in output_layer.parameters():
+                    param.requires_grad = True
+                print(f"  Qwen语言模型输出层已解冻")
