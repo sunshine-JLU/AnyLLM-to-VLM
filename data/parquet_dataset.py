@@ -98,8 +98,32 @@ class ParquetMultiModalDataset(Dataset):
         return prompt
     
     def _generate_loss_mask(self, input_ids: list) -> list:
-        """生成loss mask（只在assistant回答部分计算loss）"""
+        """生成loss mask（在assistant回答部分和图像token位置计算loss）"""
         loss_mask = [0] * len(input_ids)
+        
+        # 找到图像token的位置（如果存在）
+        image_token_ids = None
+        if self.image_special_token:
+            try:
+                image_token_ids = self.tokenizer.encode(
+                    self.image_special_token,
+                    add_special_tokens=False
+                )
+            except:
+                pass
+        
+        # 标记图像token位置（让投影层能收到梯度）
+        if image_token_ids:
+            len_image_ids = len(image_token_ids)
+            i = 0
+            while i < len(input_ids) - len_image_ids + 1:
+                if input_ids[i:i + len_image_ids] == image_token_ids:
+                    # 图像token位置也计算loss（这样投影层能收到梯度）
+                    for j in range(i, min(i + len_image_ids, len(input_ids))):
+                        loss_mask[j] = 1
+                    i += len_image_ids
+                else:
+                    i += 1
         
         # 找到所有<|im_start|>assistant的位置
         i = 0
@@ -118,7 +142,7 @@ class ParquetMultiModalDataset(Dataset):
                         end_pos += 1
                     
                     # 为assistant回答部分设置loss mask为1
-                    # 注意：从start_pos+1开始，因为start_pos是assistant token的开始
+                    # 注意：从start_pos开始，因为start_pos是assistant回答的开始
                     for j in range(start_pos, min(end_pos, self.max_length)):
                         loss_mask[j] = 1
                     
