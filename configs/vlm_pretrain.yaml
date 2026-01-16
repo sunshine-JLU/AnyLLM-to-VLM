@@ -17,6 +17,8 @@ model:
   
   image_special_token: "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
   
+  vision_processor_type: "patch_insert"  # 'patch_insert' (直接插入所有patch) 或 'mean_pooling' (平均pooling后插入)
+  
   use_bfloat16: true
   max_seq_length: 640
 

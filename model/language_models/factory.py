@@ -7,12 +7,8 @@ from typing import Dict, Type, Optional
 from .base import BaseLanguageModel
 from .qwen3_model import Qwen3LanguageModel
 
-# 向后兼容：保留旧的导入（如果存在）
-try:
-    from .qwen_model import QwenLanguageModel
-except ImportError:
-    # 如果旧文件不存在，使用新类作为别名
-    QwenLanguageModel = Qwen3LanguageModel
+# 向后兼容：使用Qwen3LanguageModel作为QwenLanguageModel的别名
+QwenLanguageModel = Qwen3LanguageModel
 
 
 class LanguageModelFactory:

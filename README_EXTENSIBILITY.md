@@ -17,7 +17,7 @@ model/
 ├── language_models/       # 语言模型模块
 │   ├── base.py           # 基类
 │   ├── factory.py        # 工厂
-│   └── qwen_model.py     # Qwen实现
+│   └── qwen3_model.py    # Qwen3实现（支持Qwen3和Qwen2.5系列）
 └── projections/          # 投影层模块
     ├── base.py           # 基类
     ├── factory.py        # 工厂

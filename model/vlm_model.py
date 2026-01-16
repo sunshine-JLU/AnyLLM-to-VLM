@@ -34,6 +34,15 @@ except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from model.projections import ProjectionFactory
 
+# 导入视觉特征处理器模块
+try:
+    from .vision_processors import VisionProcessorFactory
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from model.vision_processors import VisionProcessorFactory
+
 warnings.filterwarnings('ignore')
 
 
@@ -88,6 +97,13 @@ class MultiModalVLM(nn.Module):
         if self.image_special_token:
             self._add_image_special_token()
         
+        # 视觉特征处理器（使用工厂模式）
+        vision_processor_type = getattr(config, 'vision_processor_type', 'patch_insert')
+        print(f"创建视觉特征处理器: {vision_processor_type}")
+        self.vision_processor = self._load_vision_processor(
+            processor_type=vision_processor_type
+        )
+        
         # 打印可训练参数信息
         self._print_trainable_params()
         
@@ -95,6 +111,7 @@ class MultiModalVLM(nn.Module):
         print(f"  视觉模型维度: {vision_dim}")
         print(f"  语言模型维度: {language_dim}")
         print(f"  图像特殊token: {self.image_special_token[:20]}...")
+        print(f"  视觉特征处理方式: {vision_processor_type}")
     
     def _load_vision_model(
         self,
@@ -207,6 +224,30 @@ class MultiModalVLM(nn.Module):
             print(f"可用的投影层类型: {ProjectionFactory.list_projections()}")
             raise
     
+    def _load_vision_processor(
+        self,
+        processor_type: str
+    ):
+        """
+        加载视觉特征处理器（使用工厂模式）
+        
+        Args:
+            processor_type: 处理器类型（如 'patch_insert', 'mean_pooling'）
+        
+        Returns:
+            视觉特征处理器实例
+        """
+        try:
+            processor = VisionProcessorFactory.create(
+                processor_type=processor_type
+            )
+            print(f"  视觉特征处理器加载成功: {processor_type}")
+            return processor
+        except Exception as e:
+            print(f"加载视觉特征处理器失败: {e}")
+            print(f"可用的处理器类型: {VisionProcessorFactory.list_processors()}")
+            raise
+    
     def _add_image_special_token(self):
         """添加图像特殊token"""
         tokenizer = self.get_tokenizer()
@@ -298,100 +339,32 @@ class MultiModalVLM(nn.Module):
     def count_vision_proj(self, tokens: torch.Tensor, h: torch.Tensor, 
                          vision_tensors: Optional[torch.Tensor] = None,
                          seqlen: int = 512) -> torch.Tensor:
-        """替换图像token为视觉特征"""
+        """
+        替换图像token为视觉特征（使用视觉特征处理器）
+        
+        Args:
+            tokens: 输入token序列 [batch_size, seq_len]
+            h: 文本embedding [batch_size, seq_len, hidden_dim]
+            vision_tensors: 视觉特征 [batch_size, num_patches, vision_dim]
+            seqlen: 序列最大长度
+        
+        Returns:
+            处理后的hidden_states [batch_size, seq_len, hidden_dim]
+        """
         if self.image_token_ids is None or vision_tensors is None:
-            return h
-        
-        def find_indices(tokens_tensor, image_ids):
-            """找到图像token的位置"""
-            batch_size, seq_len = tokens_tensor.shape
-            len_image_ids = len(image_ids)
-            
-            if len_image_ids > seq_len:
-                return None
-            
-            # 将图像id转换为tensor
-            image_ids_tensor = torch.tensor(image_ids, device=tokens_tensor.device)
-            
-            # 查找匹配位置
-            matches = []
-            for b in range(batch_size):
-                batch_matches = []
-                for i in range(seq_len - len_image_ids + 1):
-                    if torch.all(tokens_tensor[b, i:i+len_image_ids] == image_ids_tensor):
-                        batch_matches.append((i, i + len_image_ids - 1))
-                matches.append(batch_matches)
-            
-            return matches
-        
-        # 找到图像token的位置
-        image_indices = find_indices(tokens, self.image_token_ids)
-        if not image_indices or all(len(indices) == 0 for indices in image_indices):
             return h
         
         # 投影视觉特征 [batch_size, num_patches, language_dim]
         vision_proj = self.vision_proj(vision_tensors)
         
-        # 确保投影后的特征与hidden_states的数据类型一致
-        if vision_proj.dtype != h.dtype:
-            vision_proj = vision_proj.to(dtype=h.dtype)
-        
-        # 替换图像token：使用pooled特征（平均所有patch）替换图像token
-        # 这样可以保持序列长度不变，同时利用所有patch的信息
-        batch_size = h.size(0)
-        new_h = []
-        
-        for i in range(batch_size):
-            if image_indices[i]:
-                h_i = h[i]
-                
-                # 处理每个图像token位置
-                for img_idx, (start_idx, end_idx) in enumerate(image_indices[i]):
-                    if img_idx >= vision_proj.size(1):
-                        break
-                    
-                    # 获取该图像的所有patch特征 [num_patches, language_dim]
-                    vision_features = vision_proj[i]  # [num_patches, language_dim]
-                    
-                    # 使用平均pooling得到单个特征向量 [language_dim]
-                    vision_feat_pooled = vision_features.mean(dim=0)  # [language_dim]
-                    
-                    # 计算图像token的长度
-                    token_length = end_idx - start_idx + 1
-                    
-                    # 用pooled特征替换图像token（保持序列长度不变）
-                    # 如果图像token是多个token，用pooled特征重复填充
-                    vision_feat_to_insert = vision_feat_pooled.unsqueeze(0).repeat(token_length, 1)  # [token_length, language_dim]
-                    
-                    # 替换图像token序列为视觉特征
-                    h_i = torch.cat([
-                        h_i[:start_idx],
-                        vision_feat_to_insert,
-                        h_i[end_idx + 1:]
-                    ], dim=0)
-                    
-                    # 如果序列长度超过限制，截断
-                    if h_i.size(0) > seqlen:
-                        h_i = h_i[:seqlen]
-                
-                new_h.append(h_i)
-            else:
-                new_h.append(h[i])
-        
-        # 确保所有序列长度一致（填充或截断到原始长度）
-        original_len = h.size(1)
-        for i in range(len(new_h)):
-            if new_h[i].size(0) < original_len:
-                # 填充
-                padding_size = original_len - new_h[i].size(0)
-                padding = torch.zeros(padding_size, new_h[i].size(1), 
-                                    dtype=new_h[i].dtype, device=new_h[i].device)
-                new_h[i] = torch.cat([new_h[i], padding], dim=0)
-            elif new_h[i].size(0) > original_len:
-                # 截断到原始长度
-                new_h[i] = new_h[i][:original_len]
-        
-        return torch.stack(new_h, dim=0)
+        # 使用视觉特征处理器处理
+        return self.vision_processor.process_vision_features(
+            tokens=tokens,
+            hidden_states=h,
+            vision_proj=vision_proj,
+            image_token_ids=self.image_token_ids,
+            seqlen=seqlen
+        )
     
     def forward(
         self,

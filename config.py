@@ -29,6 +29,9 @@ class ModelConfig:
     image_special_token: str = '@' * 196
     image_token_ids: Optional[List[int]] = None  # 这个字段需要保持
     
+    # 视觉特征处理器配置
+    vision_processor_type: str = "patch_insert"  # 'patch_insert' (直接插入所有patch) 或 'mean_pooling' (平均pooling)
+    
     # 训练配置
     use_bfloat16: bool = True
     max_seq_length: int = 512
