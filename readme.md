@@ -10,7 +10,8 @@ Turn any text-only LLM into a Vision-Language Model through efficient training.
 - Project Scalability Guide :[`README_EXTENSIBILITY.md`](https://github.com/sunshine-JLU/AnyLLM-to-VLM/blob/main/README_EXTENSIBILITY.md)
 - How to change a new vision encoder :[`QUICK_START_VISION_ENCODERS.md`](https://github.com/sunshine-JLU/AnyLLM-to-VLM/blob/main/QUICK_START_VISION_ENCODERS.md)
 - more details concerning vision encoder :[`README_VISION_ENCODERS.md`](https://github.com/sunshine-JLU/AnyLLM-to-VLM/blob/main/README_VISION_ENCODERS.md)
-
+- how to use multi-gpu to train:[`README_MULTI_GPU.md`](https://github.com/sunshine-JLU/AnyLLM-to-VLM/blob/main/README_MULTI_GPU.md)
+  
 ## Quick Start
 
 Follow these steps to get started quickly:
@@ -25,6 +26,7 @@ Follow these steps to get started quickly:
 2. **Papare the environment**  
    ```bash
    pip install -r requirements.txt
+   pip install protobuf --upgrade
 3. **Papare the dataset and your models**  
    ```bash
    cd dataset
