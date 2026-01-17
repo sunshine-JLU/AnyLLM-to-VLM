@@ -631,18 +631,18 @@ class VLMTrainer:
         train_losses = [loss for _, loss in self.train_loss_history]
         
         # 绘制训练损失曲线
-        plt.plot(train_steps, train_losses, label='训练损失', color='blue', alpha=0.7, linewidth=1.5)
+        plt.plot(train_steps, train_losses, label='Train Loss', color='blue', alpha=0.7, linewidth=1.5)
         
         # 如果有验证损失，也绘制验证损失曲线
         if self.val_loss_history:
             val_steps = [step for step, _ in self.val_loss_history]
             val_losses = [loss for _, loss in self.val_loss_history]
-            plt.plot(val_steps, val_losses, label='验证损失', color='red', alpha=0.7, linewidth=1.5, marker='o', markersize=4)
+            plt.plot(val_steps, val_losses, label='Validation Loss', color='red', alpha=0.7, linewidth=1.5, marker='o', markersize=4)
         
         # 设置图形属性
-        plt.xlabel('训练步数 (Step)', fontsize=12)
-        plt.ylabel('损失值 (Loss)', fontsize=12)
-        plt.title('训练损失曲线', fontsize=14, fontweight='bold')
+        plt.xlabel('Step', fontsize=12)
+        plt.ylabel('Loss', fontsize=12)
+        plt.title('Training Loss Curve', fontsize=14, fontweight='bold')
         plt.legend(fontsize=11)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
