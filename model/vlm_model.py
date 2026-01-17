@@ -327,8 +327,15 @@ class MultiModalVLM(nn.Module):
         
         if stage == "pretrain":
             # 预训练阶段：冻结所有参数，除了 vision_proj 层
-            # 额外解冻LLM最后一层参数
-            print("  预训练阶段：冻结所有参数，除了 vision_proj 层和 LLM 最后一层")
+            # 额外解冻LLM后N层参数（从配置读取，默认1层）
+            # 如果添加了新token，embedding层需要可训练
+            
+            # 读取配置中的层数，如果未配置或为0，默认使用1层（minimind-v策略）
+            layers_to_unfreeze = getattr(self.config, 'language_layers_to_unfreeze', 0)
+            if layers_to_unfreeze <= 0:
+                layers_to_unfreeze = 1  # minimind-v默认策略：解冻最后一层
+            
+            print(f"  预训练阶段：冻结所有参数，除了 vision_proj 层和 LLM 后 {layers_to_unfreeze} 层")
             
             if not use_lora:
                 # 1. 冻结所有参数（不包括LoRA参数，如果使用LoRA）
@@ -340,12 +347,26 @@ class MultiModalVLM(nn.Module):
                 param.requires_grad = True
             print("  ✓ vision_proj 层已解冻")
             
-            # 3. 解冻 LLM 最后一层（如果不使用LoRA）
+            # 3. 解冻 LLM 后N层（如果不使用LoRA）
             if not use_lora:
-                self.language_model.unfreeze_layers(num_layers=1)
-                print("  ✓ LLM 最后一层已解冻")
+                self.language_model.unfreeze_layers(num_layers=layers_to_unfreeze)
+                print(f"  ✓ LLM 后 {layers_to_unfreeze} 层已解冻")
             else:
                 print("  ✓ 使用LoRA，LoRA参数自动可训练")
+            
+            # 4. 如果添加了新image token，embedding层必须可训练（因为新token的embedding需要学习）
+            if self.image_token_ids is not None:
+                embedding_layer = self.language_model.get_embedding_layer()
+                if embedding_layer is not None:
+                    for param in embedding_layer.parameters():
+                        param.requires_grad = True
+                    print("  ✓ embedding层已解冻（因为添加了新image token）")
+            else:
+                # 如果没有添加新token，确保embedding层冻结
+                embedding_layer = self.language_model.get_embedding_layer()
+                if embedding_layer is not None:
+                    for param in embedding_layer.parameters():
+                        param.requires_grad = False
             
         elif stage == "sft":
             # SFT阶段：保持冻结 vision_encoder
