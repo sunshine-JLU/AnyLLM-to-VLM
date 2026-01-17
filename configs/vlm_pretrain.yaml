@@ -21,6 +21,13 @@ model:
   
   use_bfloat16: true
   max_seq_length: 640
+  
+  # LoRA配置（可选，显存占用大时可启用）
+  use_lora: false  # 设置为 true 启用LoRA训练
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.1
+  lora_target_modules: null  # 如果为null，将自动选择（通常为 ["q_proj", "k_proj", "v_proj", "o_proj"]）
 
 training:
   stage: "pretrain"

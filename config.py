@@ -18,6 +18,13 @@ class ModelConfig:
     freeze_language_model: bool = False
     language_layers_to_unfreeze: int = 0
     
+    # LoRA配置
+    use_lora: bool = False
+    lora_r: int = 16
+    lora_alpha: int = 32
+    lora_dropout: float = 0.1
+    lora_target_modules: Optional[List[str]] = None  # 如果为None，将自动选择
+    
     # 投影层配置
     projection_type: str = "mlp"
     projection_hidden_dim: Optional[int] = None
@@ -35,6 +42,7 @@ class ModelConfig:
     # 训练配置
     use_bfloat16: bool = True
     max_seq_length: int = 512
+    training_stage: Optional[str] = None  # 训练阶段 ('pretrain' 或 'sft')，用于自动设置参数冻结策略
     
     def __post_init__(self):
         # 确保数值类型正确

@@ -5,14 +5,25 @@
 
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from abc import ABC, abstractmethod
 
 
 class BaseLanguageModel(ABC, nn.Module):
     """语言模型基类"""
     
-    def __init__(self, model_path: str, freeze: bool = False, layers_to_unfreeze: int = 0, use_bfloat16: bool = True):
+    def __init__(
+        self, 
+        model_path: str, 
+        freeze: bool = False, 
+        layers_to_unfreeze: int = 0, 
+        use_bfloat16: bool = True,
+        use_lora: bool = False,
+        lora_r: int = 16,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.1,
+        lora_target_modules: Optional[List[str]] = None
+    ):
         """
         初始化语言模型
         
@@ -21,26 +32,41 @@ class BaseLanguageModel(ABC, nn.Module):
             freeze: 是否冻结参数
             layers_to_unfreeze: 解冻后几层
             use_bfloat16: 是否使用bfloat16
+            use_lora: 是否使用LoRA
+            lora_r: LoRA rank
+            lora_alpha: LoRA alpha
+            lora_dropout: LoRA dropout
+            lora_target_modules: LoRA目标模块列表
         """
         super().__init__()
         self.model_path = model_path
         self.freeze = freeze
         self.layers_to_unfreeze = layers_to_unfreeze
         self.use_bfloat16 = use_bfloat16
+        self.use_lora = use_lora
+        self.lora_r = lora_r
+        self.lora_alpha = lora_alpha
+        self.lora_dropout = lora_dropout
+        self.lora_target_modules = lora_target_modules
         self._hidden_size = None
         self._tokenizer = None
         self.model = self.load_model()
         self._hidden_size = self._get_hidden_size()
         
-        # 设置参数冻结
-        if freeze:
-            self.freeze_params()
-        else:
-            self.freeze_params()  # 先全部冻结
-            if layers_to_unfreeze > 0:
-                self.unfreeze_layers(layers_to_unfreeze)
-            # 始终解冻embedding和输出层
-            self.unfreeze_embedding_and_output()
+        # 如果使用LoRA，应用LoRA适配器
+        if use_lora:
+            self._apply_lora()
+        
+        # 设置参数冻结（如果不使用LoRA）
+        if not use_lora:
+            if freeze:
+                self.freeze_params()
+            else:
+                self.freeze_params()  # 先全部冻结
+                if layers_to_unfreeze > 0:
+                    self.unfreeze_layers(layers_to_unfreeze)
+                # 始终解冻embedding和输出层
+                self.unfreeze_embedding_and_output()
     
     @abstractmethod
     def load_model(self) -> nn.Module:
@@ -138,6 +164,13 @@ class BaseLanguageModel(ABC, nn.Module):
             # 某些模型可能有get_input_embeddings方法
             return self.model.get_input_embeddings()
         return None
+    
+    def _apply_lora(self):
+        """
+        应用LoRA适配器到模型
+        子类应该重写此方法以实现具体的LoRA配置
+        """
+        pass
     
     def forward(self, *args, **kwargs):
         """前向传播"""

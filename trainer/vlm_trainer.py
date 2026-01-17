@@ -654,6 +654,9 @@ def train_vlm(
 ):
     """训练VLM模型的入口函数"""
     
+    # 将训练阶段传递给模型配置
+    model_config.training_stage = training_config.stage
+    
     print(f"创建模型...")
     model = MultiModalVLM(model_config)
     

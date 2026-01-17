@@ -5,10 +5,18 @@ Qwen3语言模型实现
 
 import torch
 import torch.nn as nn
-from typing import Optional
+from typing import Optional, List
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .base import BaseLanguageModel
+
+# 尝试导入peft库（用于LoRA）
+try:
+    from peft import LoraConfig, get_peft_model, TaskType
+    PEFT_AVAILABLE = True
+except ImportError:
+    PEFT_AVAILABLE = False
+    print("警告: peft库未安装，无法使用LoRA功能。请运行: pip install peft")
 
 
 class Qwen3LanguageModel(BaseLanguageModel):
@@ -80,6 +88,56 @@ class Qwen3LanguageModel(BaseLanguageModel):
     def hidden_size(self) -> int:
         """返回隐藏层维度"""
         return self._hidden_size
+    
+    def _apply_lora(self):
+        """应用LoRA适配器到Qwen3模型"""
+        if not PEFT_AVAILABLE:
+            raise ImportError(
+                "peft库未安装，无法使用LoRA功能。\n"
+                "请运行: pip install peft"
+            )
+        
+        # 如果没有指定目标模块，使用Qwen3的默认模块
+        if self.lora_target_modules is None:
+            # Qwen3通常使用这些模块名称
+            self.lora_target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
+            # 有些Qwen3模型可能使用不同的名称，尝试自动检测
+            try:
+                # 检查模型结构来确定正确的模块名称
+                if hasattr(self.model, 'model') and hasattr(self.model.model, 'layers'):
+                    first_layer = self.model.model.layers[0]
+                    available_modules = [name for name, _ in first_layer.named_modules() if 'proj' in name or 'gate' in name]
+                    if available_modules:
+                        # 过滤出常见的注意力模块
+                        target_candidates = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+                        self.lora_target_modules = [m for m in target_candidates if any(m in name for name in available_modules)]
+                        if not self.lora_target_modules:
+                            self.lora_target_modules = available_modules[:4]  # 取前4个
+            except Exception as e:
+                print(f"  警告: 无法自动检测LoRA目标模块，使用默认模块: {self.lora_target_modules}")
+        
+        print(f"  应用LoRA适配器:")
+        print(f"    rank (r): {self.lora_r}")
+        print(f"    alpha: {self.lora_alpha}")
+        print(f"    dropout: {self.lora_dropout}")
+        print(f"    目标模块: {self.lora_target_modules}")
+        
+        # 配置LoRA
+        lora_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=self.lora_r,
+            lora_alpha=self.lora_alpha,
+            lora_dropout=self.lora_dropout,
+            target_modules=self.lora_target_modules,
+            bias="none",
+        )
+        
+        # 应用LoRA到模型
+        self.model = get_peft_model(self.model, lora_config)
+        
+        # 打印可训练参数信息
+        self.model.print_trainable_parameters()
+        print(f"  ✓ LoRA适配器已应用到Qwen3模型")
     
     def unfreeze_layers(self, num_layers: int):
         """

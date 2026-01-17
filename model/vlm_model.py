@@ -65,13 +65,22 @@ class MultiModalVLM(nn.Module):
         
         print(f"从本地路径加载语言模型: {config.language_model_path}")
         print(f"语言模型类型: {config.language_model_type}")
+        # LoRA配置
+        use_lora = getattr(config, 'use_lora', False)
+        if use_lora:
+            print(f"  使用LoRA训练: r={getattr(config, 'lora_r', 16)}, alpha={getattr(config, 'lora_alpha', 32)}")
         # 语言模型（使用工厂模式）
         self.language_model = self._load_language_model(
             model_type=config.language_model_type,
             model_path=config.language_model_path,
             freeze=config.freeze_language_model,
             layers_to_unfreeze=config.language_layers_to_unfreeze,
-            use_bfloat16=config.use_bfloat16
+            use_bfloat16=config.use_bfloat16,
+            use_lora=use_lora,
+            lora_r=getattr(config, 'lora_r', 16),
+            lora_alpha=getattr(config, 'lora_alpha', 32),
+            lora_dropout=getattr(config, 'lora_dropout', 0.1),
+            lora_target_modules=getattr(config, 'lora_target_modules', None)
         )
         
         # 投影层（使用工厂模式）
@@ -103,6 +112,12 @@ class MultiModalVLM(nn.Module):
         self.vision_processor = self._load_vision_processor(
             processor_type=vision_processor_type
         )
+        
+        # 根据训练阶段设置参数冻结策略（minimind-v策略）
+        training_stage = getattr(config, 'training_stage', None)
+        if training_stage:
+            print(f"应用训练阶段参数冻结策略: {training_stage}")
+            self._apply_training_stage_freezing(training_stage)
         
         # 打印可训练参数信息
         self._print_trainable_params()
@@ -152,7 +167,12 @@ class MultiModalVLM(nn.Module):
         model_path: str,
         freeze: bool = False,
         layers_to_unfreeze: int = 0,
-        use_bfloat16: bool = True
+        use_bfloat16: bool = True,
+        use_lora: bool = False,
+        lora_r: int = 16,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.1,
+        lora_target_modules: Optional[List[str]] = None
     ):
         """
         加载语言模型（使用工厂模式）
@@ -163,6 +183,11 @@ class MultiModalVLM(nn.Module):
             freeze: 是否冻结参数
             layers_to_unfreeze: 解冻后几层
             use_bfloat16: 是否使用bfloat16
+            use_lora: 是否使用LoRA
+            lora_r: LoRA rank
+            lora_alpha: LoRA alpha
+            lora_dropout: LoRA dropout
+            lora_target_modules: LoRA目标模块列表
         
         Returns:
             语言模型实例
@@ -173,7 +198,12 @@ class MultiModalVLM(nn.Module):
                 model_path=model_path,
                 freeze=freeze,
                 layers_to_unfreeze=layers_to_unfreeze,
-                use_bfloat16=use_bfloat16
+                use_bfloat16=use_bfloat16,
+                use_lora=use_lora,
+                lora_r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+                lora_target_modules=lora_target_modules
             )
             print(f"  语言模型加载成功: {model_type}")
             return model
@@ -285,6 +315,60 @@ class MultiModalVLM(nn.Module):
                 add_special_tokens=False
             )
             print(f"  图像特殊token已存在，ID: {self.image_token_ids}")
+    
+    def _apply_training_stage_freezing(self, stage: str):
+        """
+        根据训练阶段应用参数冻结策略（minimind-v策略）
+        
+        Args:
+            stage: 训练阶段 ('pretrain' 或 'sft')
+        """
+        use_lora = getattr(self.config, 'use_lora', False)
+        
+        if stage == "pretrain":
+            # 预训练阶段：冻结所有参数，除了 vision_proj 层
+            # 额外解冻LLM最后一层参数
+            print("  预训练阶段：冻结所有参数，除了 vision_proj 层和 LLM 最后一层")
+            
+            if not use_lora:
+                # 1. 冻结所有参数（不包括LoRA参数，如果使用LoRA）
+                for param in self.parameters():
+                    param.requires_grad = False
+            
+            # 2. 解冻 vision_proj 层
+            for param in self.vision_proj.parameters():
+                param.requires_grad = True
+            print("  ✓ vision_proj 层已解冻")
+            
+            # 3. 解冻 LLM 最后一层（如果不使用LoRA）
+            if not use_lora:
+                self.language_model.unfreeze_layers(num_layers=1)
+                print("  ✓ LLM 最后一层已解冻")
+            else:
+                print("  ✓ 使用LoRA，LoRA参数自动可训练")
+            
+        elif stage == "sft":
+            # SFT阶段：保持冻结 vision_encoder
+            # 解冻所有其他参数，包括 vision_proj 和所有 LLM 层
+            print("  SFT阶段：冻结 vision_encoder，解冻 vision_proj 和所有 LLM 层")
+            
+            # 1. 确保 vision_encoder 冻结
+            self.vision_encoder.freeze_params()
+            print("  ✓ vision_encoder 保持冻结")
+            
+            # 2. 解冻 vision_proj
+            for param in self.vision_proj.parameters():
+                param.requires_grad = True
+            print("  ✓ vision_proj 层已解冻")
+            
+            # 3. 解冻所有 LLM 层（如果不使用LoRA）
+            if not use_lora:
+                self.language_model.unfreeze_params()
+                print("  ✓ 所有 LLM 层已解冻")
+            else:
+                print("  ✓ 使用LoRA，LoRA参数自动可训练")
+        else:
+            print(f"  警告: 未知的训练阶段 '{stage}'，使用默认参数冻结策略")
     
     def _print_trainable_params(self):
         """打印可训练参数信息"""
