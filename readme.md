@@ -41,17 +41,18 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
    ```bash
    python train_vlm.py --config configs/vlm_pretrain.yaml --stage pretrain
    # python train_vlm.py --config configs/vlm_pretrain.yaml --stage pretrain | tee pretrain.log
-   # 使用2张GPU训练
-   # torchrun --nproc_per_node=2 train_vlm.py --config configs/vlm_pretrain.yaml --stage pretrain | tee pretrain.log       
+   # 使用4张GPU训练
+   # torchrun --nproc_per_node=4 train_vlm.py --config configs/vlm_pretrain.yaml --stage pretrain | tee pretrain.log       
    # In a new terminal, type `nvitop` :
 <img width="2072" height="262" alt="image" src="https://github.com/user-attachments/assets/c8888c98-e61e-4694-8c2f-fd49bb11874b" />
+<img width="1976" height="812" alt="853c78a4c1d0691027899dcb1012ac18" src="https://github.com/user-attachments/assets/147c96ea-d8e3-43ab-865b-b22ab5c4c680" />
 
 
 5. **Run the Supervised Fine-Tuning Script**
    ```bash
    python train_vlm.py --config configs/vlm_sft.yaml --stage sft
-   # 使用2张GPU训练 
-   # torchrun --nproc_per_node=2 train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log      
+   # 使用4张GPU训练 
+   # torchrun --nproc_per_node=4 train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log      
    # python train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log
 6. **Eval the model**
    ```bash
