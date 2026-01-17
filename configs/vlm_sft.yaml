@@ -54,4 +54,4 @@ training:
   eval_every_n_steps: 200
   
   use_ddp: false
-  num_workers: 8
+  num_workers: 1

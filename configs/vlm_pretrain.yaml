@@ -31,7 +31,7 @@ model:
 
 training:
   stage: "pretrain"
-  batch_size: 40
+  batch_size: 10
   num_epochs: 1
   learning_rate: 4e-4
   warmup_steps: 1000
