@@ -5,7 +5,7 @@ model:
   vision_layers_to_unfreeze: 0
   
   language_model_type: "qwen3"  # 使用 'qwen3' 或 'qwen' 都可以，支持所有Qwen3系列模型（0.5B, 0.6B, 1.5B, 2B, 7B等）
-  language_model_path: "./models/Qwen3-0.6B"
+  language_model_path: "./models/Qwen2.5-0.5B-Instruct"
   freeze_language_model: false
   language_layers_to_unfreeze: 2  # 解冻后2层transformer层进行训练，设置为0则只训练投影层、embedding和输出层
   
@@ -23,15 +23,15 @@ model:
   max_seq_length: 640
   
   # LoRA配置（可选，显存占用大时可启用）
-  use_lora: false  # 设置为 true 启用LoRA训练
-  lora_r: 16
-  lora_alpha: 32
+  use_lora: true  # 设置为 true 启用LoRA训练
+  lora_r: 8
+  lora_alpha: 16
   lora_dropout: 0.1
   lora_target_modules: null  # 如果为null，将自动选择（通常为 ["q_proj", "k_proj", "v_proj", "o_proj"]）
 
 training:
   stage: "pretrain"
-  batch_size: 10
+  batch_size: 40
   num_epochs: 1
   learning_rate: 4e-4
   warmup_steps: 1000
@@ -41,7 +41,7 @@ training:
   data_path: "./dataset/pretrain_data.parquet"
   max_seq_length: 640
   
-  accumulation_steps: 1
+  accumulation_steps: 2
   use_mixed_precision: true
   mixed_precision_dtype: "bfloat16"
   

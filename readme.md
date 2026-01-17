@@ -34,7 +34,7 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
    wget https://modelscope.cn/datasets/gongjy/minimind-v_dataset/resolve/master/pretrain_data.parquet
    cd ..
    cd models
-   modelscope download --model Qwen/Qwen3-0.6B --local_dir ./Qwen3-0.6B
+   modelscope download --model Qwen/Qwen2.5-0.5B-Instruct --local_dir ./Qwen2.5-0.5B-Instruct
    modelscope download --model openai-mirror/clip-vit-base-patch16 --local_dir ./clip-vit-base-patch16
    cd ..
 4. **Run the Pretrain Script**
@@ -56,7 +56,7 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
    # python train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log
 6. **Eval the model**
    ```bash
-   python eval_vlm.py --checkpoint ./checkpoints/sft/best_model.pt --config configs/vlm_sft.yaml --mode generate --image ./sample.jpg --question "描述这张图片" --max_new_tokens 512
+   python eval_vlm.py --checkpoint ./checkpoints/sft/checkpoint_epoch1.pt --config configs/vlm_sft.yaml --mode generate --image ./sample.jpg --question "描述这张图片" --max_new_tokens 512
 7. **Test HardWare Environment**
 <img width="1290" height="332" alt="76be5859-27b6-4cd6-941c-e1ef95b769cc" src="https://github.com/user-attachments/assets/50496cc7-417a-42f1-8f44-a6e555c09cca" />
 
