@@ -145,8 +145,17 @@ class VLMTrainer:
         pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
         collator = DataCollator(pad_token_id=pad_token_id)
         
-        # 限制worker数量避免内存问题
-        num_workers = min(config.num_workers, 4)
+        # 使用配置的worker数量（不强制限制）
+        # 注意：在多卡分布式训练时，如果num_workers设置过大可能导致死锁
+        # 例如：4卡 × 4 workers = 16个子进程，可能导致资源竞争
+        # 如果遇到死锁问题，建议在多卡训练时将num_workers设为1
+        num_workers = config.num_workers
+        
+        if self._is_main_process():
+            world_size_info = f", world_size={config.world_size}" if self.is_distributed else ""
+            print(f"数据加载器配置: num_workers={num_workers} (分布式: {self.is_distributed}{world_size_info})")
+            if self.is_distributed and num_workers > 1:
+                print(f"  提示: 多卡训练时使用 num_workers={num_workers}，如果遇到死锁，建议减小此值")
         
         self.train_loader = DataLoader(
             train_dataset,
@@ -160,13 +169,15 @@ class VLMTrainer:
         )
         
         if val_dataset:
+            # 验证时使用更少的worker（避免占用过多资源）
+            val_num_workers = max(1, min(2, num_workers)) if num_workers > 0 else 0
             self.val_loader = DataLoader(
                 val_dataset,
                 batch_size=config.batch_size,
                 shuffle=False,
                 sampler=val_sampler,
                 collate_fn=collator,
-                num_workers=min(2, num_workers),  # 验证时使用更少的worker
+                num_workers=val_num_workers,
                 pin_memory=True
             )
         else:
