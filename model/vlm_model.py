@@ -113,7 +113,7 @@ class MultiModalVLM(nn.Module):
             processor_type=vision_processor_type
         )
         
-        # 根据训练阶段设置参数冻结策略（minimind-v策略）
+        # 根据训练阶段设置参数冻结策略
         training_stage = getattr(config, 'training_stage', None)
         if training_stage:
             print(f"应用训练阶段参数冻结策略: {training_stage}")
@@ -318,7 +318,7 @@ class MultiModalVLM(nn.Module):
     
     def _apply_training_stage_freezing(self, stage: str):
         """
-        根据训练阶段应用参数冻结策略（minimind-v策略）
+        根据训练阶段应用参数冻结策略
         
         Args:
             stage: 训练阶段 ('pretrain' 或 'sft')
@@ -330,10 +330,10 @@ class MultiModalVLM(nn.Module):
             # 额外解冻LLM后N层参数（从配置读取，默认1层）
             # 如果添加了新token，embedding层需要可训练
             
-            # 读取配置中的层数，如果未配置或为0，默认使用1层（minimind-v策略）
+            # 读取配置中的层数，如果未配置或为0，默认使用1层
             layers_to_unfreeze = getattr(self.config, 'language_layers_to_unfreeze', 0)
             if layers_to_unfreeze <= 0:
-                layers_to_unfreeze = 1  # minimind-v默认策略：解冻最后一层
+                layers_to_unfreeze = 1  # 默认策略：解冻最后一层
             
             print(f"  预训练阶段：冻结所有参数，除了 vision_proj 层和 LLM 后 {layers_to_unfreeze} 层")
             

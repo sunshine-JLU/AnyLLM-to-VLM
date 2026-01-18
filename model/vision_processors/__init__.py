@@ -12,10 +12,6 @@ from .mean_pooling_processor import MeanPoolingVisionProcessor
 VisionProcessorFactory.register('patch_insert', PatchInsertVisionProcessor)
 VisionProcessorFactory.register('mean_pooling', MeanPoolingVisionProcessor)
 
-# 向后兼容：保留旧的名称
-VisionProcessorFactory.register('minimind', PatchInsertVisionProcessor)  # 向后兼容
-VisionProcessorFactory.register('pooling', MeanPoolingVisionProcessor)  # 向后兼容
-
 __all__ = [
     'BaseVisionProcessor',
     'VisionProcessorFactory',

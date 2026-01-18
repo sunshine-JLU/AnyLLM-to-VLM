@@ -12,7 +12,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 class ParquetMultiModalDataset(Dataset):
-    """基于Parquet格式的多模态数据集（兼容MiniMind-V格式）"""
+    """基于Parquet格式的多模态数据集"""
     
     def __init__(
         self,

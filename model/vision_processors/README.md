@@ -45,12 +45,6 @@ model:
 
 如果不指定 `vision_processor_type`，默认使用 `"patch_insert"`。
 
-### 向后兼容
-
-为了保持向后兼容，以下旧名称仍然可用：
-- `"minimind"` → `"patch_insert"`
-- `"pooling"` → `"mean_pooling"`
-
 ## 扩展新的处理方式
 
 ### 步骤1：创建新的处理器类
