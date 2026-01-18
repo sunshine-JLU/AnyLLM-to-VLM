@@ -36,6 +36,7 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
    cd models
    modelscope download --model Qwen/Qwen2.5-0.5B-Instruct --local_dir ./Qwen2.5-0.5B-Instruct
    modelscope download --model openai-mirror/clip-vit-base-patch16 --local_dir ./clip-vit-base-patch16
+   modelscope download --model google/siglip-so400m-patch14-384  --local_dir ./siglip-so400m-patch14-384
    cd ..
 4. **Run the Pretrain Script**
    ```bash
