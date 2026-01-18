@@ -1,6 +1,6 @@
 model:
   vision_model_type: "siglip"
-  vision_model_path: "google/siglip-so400m-patch14-384"  # 或使用本地路径 "./models/siglip-so400m-patch14-384"
+  vision_model_path: "./models/siglip-so400m-patch14-384"  # 
   freeze_vision_encoder: true
   vision_layers_to_unfreeze: 0
   
