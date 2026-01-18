@@ -57,6 +57,25 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
 6. **Eval the model**
    ```bash
    python eval_vlm.py --checkpoint ./checkpoints/sft/checkpoint_epoch1.pt --config configs/vlm_sft.yaml --mode generate --image ./sample.jpg --question "描述这张图片" --max_new_tokens 50
+7. **Test Result**
+
+<table>
+  <thead>
+    <tr>
+      <th>图片</th>
+      <th>clip-qwen2.5-0.5b</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <img src="./test_images/sample1.jpg" alt="sample1">
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+      </td>
+      <td>图中是一个繁忙的城市街道，一条长长的街道两旁都是高楼大厦。这条街上挤满了汽车、卡车和公共汽车，还有许多其他车辆在路上行驶。在街道上，可以看到许多汽车，有的在高速行驶，而其他的则停在街道一侧。此外还有一辆公交车也停在街道的右侧。街道上可以看到交通灯，表明这是一个繁忙的城市环境。</td>
+    </tr>
+  </tbody>
+</table>
 7. **Test HardWare Environment**
 <img width="1290" height="332" alt="76be5859-27b6-4cd6-941c-e1ef95b769cc" src="https://github.com/user-attachments/assets/50496cc7-417a-42f1-8f44-a6e555c09cca" />
 
