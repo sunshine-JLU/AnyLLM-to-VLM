@@ -5,6 +5,7 @@
 
 from .base import BaseVisionEncoder
 from .clip_encoder import CLIPVisionEncoder
+from .siglip_encoder import SigLIPVisionEncoder
 from .factory import VisionEncoderFactory
 
 # 可选：导入其他编码器（如果存在）
@@ -13,6 +14,7 @@ try:
     __all__ = [
         'BaseVisionEncoder',
         'CLIPVisionEncoder',
+        'SigLIPVisionEncoder',
         'ViTVisionEncoder',
         'VisionEncoderFactory',
     ]
@@ -20,5 +22,6 @@ except ImportError:
     __all__ = [
         'BaseVisionEncoder',
         'CLIPVisionEncoder',
+        'SigLIPVisionEncoder',
         'VisionEncoderFactory',
     ]

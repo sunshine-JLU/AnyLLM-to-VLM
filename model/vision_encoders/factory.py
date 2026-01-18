@@ -6,6 +6,7 @@
 from typing import Dict, Type, Optional
 from .base import BaseVisionEncoder
 from .clip_encoder import CLIPVisionEncoder
+from .siglip_encoder import SigLIPVisionEncoder
 
 
 class VisionEncoderFactory:
@@ -81,6 +82,7 @@ class VisionEncoderFactory:
 
 # 自动注册内置编码器
 VisionEncoderFactory.register('clip', CLIPVisionEncoder)
+VisionEncoderFactory.register('siglip', SigLIPVisionEncoder)
 
 # 可以在这里注册更多编码器
 # VisionEncoderFactory.register('vit', ViTVisionEncoder)
