@@ -64,7 +64,7 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
   <thead>
     <tr>
       <th width="30%">test image</th>
-      <th width="70%">clip-vit-base-patch16-MLPProjection-Qwen2.5-0.5B-Instruct</th>
+      <th width="70%">clip-vit-base-patch16-MLPProjection-patch_insert-Qwen2.5-0.5B-Instruct</th>
     </tr>
   </thead>
   <tbody>
@@ -77,13 +77,9 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
       <td>照片里有一座高耸的木制塔楼和一条小河。塔楼上有几棵松树在远处飘扬。河上有几棵树木和山景，给照片增添了动感。这条河沿着岛屿的海岸线流淌。</td>
     </tr>
     <tr>
-      <td><img src="./test_images/sample3.jpg" alt="sample3" style="width: 150px; height: 150px; object-fit: cover;"></td>
-      <td>该图片显示了一位穿着黑色西装和领带的年轻人。他站在一个房间里。他看上去很专注，好像正在考虑或讨论什么东西。</td>
-    </tr>
-    <tr>
       <td><img src="./test_images/sample4.jpg" alt="sample4" style="width: 150px; height: 150px; object-fit: cover;"></td>
       <td>图片中有一只猫站在一张桌子上。它看上去很舒服，可能是为了享受他的放松时光。</td>
-    </tr>
+    </tr>   
   </tbody>
 </table>
 </div>
