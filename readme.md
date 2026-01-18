@@ -62,8 +62,8 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
 <table>
   <thead>
     <tr>
-      <th>图片</th>
-      <th>clip-qwen2.5-0.5b</th>
+      <th>test image</th>
+      <th>clip-vit-base-patch16-MLPProjection-Qwen2.5-0.5B-Instruct</th>
     </tr>
   </thead>
   <tbody>
@@ -72,11 +72,33 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
         <img src="./test_images/sample1.jpg" alt="sample1">
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
       </td>
-      <td>图中是一个繁忙的城市街道，一条长长的街道两旁都是高楼大厦。这条街上挤满了汽车、卡车和公共汽车，还有许多其他车辆在路上行驶。在街道上，可以看到许多汽车，有的在高速行驶，而其他的则停在街道一侧。此外还有一辆公交车也停在街道的右侧。街道上可以看到交通灯，表明这是一个繁忙的城市环境。</td>
+      <td>该图片描绘了一个场景,一个男人站在一个长凳上。他手里拿着一把敞开的拐杖。人们可以看到他们正享受着闲暇时间。在背景中可以看到一只狗。这些人都似乎正在享受着他们的时光。</td>
+      </tr>
+      <tr>
+      <td>
+        <img src="./test_images/sample2.jpg" alt="sample2">
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+      </td>
+      <td>照片里有一座高耸的木制塔楼和一条小河。塔楼上有几棵松树在远处飘扬。河上有几棵树木和山景，给照片增添了动感。这条河沿着岛屿的海岸线流淌。</td>
+      </tr>
+      <tr>
+      <td>
+        <img src="./test_images/sample3.jpg" alt="sample2">
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+      </td>
+      <td>该图片显示了一位穿着黑色西装和领带的年轻人。他站在一个房间里。他看上去很专注，好像正在考虑或讨论什么东西。</td>
+      </tr>
+            <tr>
+      <td>
+        <img src="./test_images/sample4.jpg" alt="sample2">
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+      </td>
+      <td>图片中有一只猫站在一张桌子上。它看上去很舒服，可能是为了享受他的放松时光。</td>
     </tr>
   </tbody>
 </table>
-7. **Test HardWare Environment**
+
+8. **Test HardWare Environment**
 <img width="1290" height="332" alt="76be5859-27b6-4cd6-941c-e1ef95b769cc" src="https://github.com/user-attachments/assets/50496cc7-417a-42f1-8f44-a6e555c09cca" />
 
 

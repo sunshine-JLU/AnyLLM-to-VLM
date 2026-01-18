@@ -1,14 +1,16 @@
 """
 投影层模块
-支持多种投影层：MLP, Linear, Perceiver等
+支持多种投影层：MLP, Linear, DeepMLP, Perceiver等
 """
 
 from .base import BaseProjection
 from .mlp_projection import MLPProjection
+from .deep_mlp_projection import DeepMLPProjection
 from .factory import ProjectionFactory
 
 __all__ = [
     'BaseProjection',
     'MLPProjection',
+    'DeepMLPProjection',
     'ProjectionFactory',
 ]

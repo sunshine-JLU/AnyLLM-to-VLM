@@ -7,6 +7,7 @@ from typing import Dict, Type, Optional
 from .base import BaseProjection
 from .mlp_projection import MLPProjection
 from .linear_projection import LinearProjection
+from .deep_mlp_projection import DeepMLPProjection
 
 
 class ProjectionFactory:
@@ -80,6 +81,7 @@ class ProjectionFactory:
 # 自动注册内置投影层
 ProjectionFactory.register('mlp', MLPProjection)
 ProjectionFactory.register('linear', LinearProjection)
+ProjectionFactory.register('deep_mlp', DeepMLPProjection)
 
 # 可以在这里注册更多投影层
 # ProjectionFactory.register('perceiver', PerceiverProjection)
