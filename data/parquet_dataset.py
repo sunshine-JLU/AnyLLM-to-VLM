@@ -98,10 +98,15 @@ class ParquetMultiModalDataset(Dataset):
         return prompt
     
     def _generate_loss_mask(self, input_ids: list) -> list:
-        """生成loss mask（在assistant回答部分和图像token位置计算loss）"""
+        """
+        生成loss mask（只在assistant回答部分计算loss，参考LLaVA）
+        
+        注意：图像token位置不计算loss，投影层的梯度通过后续文本token的反向传播获得
+        这是LLaVA的标准做法，可以避免模型学习预测图像token本身，减少幻觉
+        """
         loss_mask = [0] * len(input_ids)
         
-        # 找到图像token的位置（如果存在）
+        # 找到图像token的位置（用于排除，不计算loss）
         image_token_ids = None
         if self.image_special_token:
             try:
@@ -112,15 +117,16 @@ class ParquetMultiModalDataset(Dataset):
             except:
                 pass
         
-        # 标记图像token位置（让投影层能收到梯度）
+        # 记录图像token位置（不计算loss）
+        image_token_positions = set()
         if image_token_ids:
             len_image_ids = len(image_token_ids)
             i = 0
             while i < len(input_ids) - len_image_ids + 1:
                 if input_ids[i:i + len_image_ids] == image_token_ids:
-                    # 图像token位置也计算loss（这样投影层能收到梯度）
+                    # 记录图像token位置，但不计算loss
                     for j in range(i, min(i + len_image_ids, len(input_ids))):
-                        loss_mask[j] = 1
+                        image_token_positions.add(j)
                     i += len_image_ids
                 else:
                     i += 1
@@ -141,10 +147,13 @@ class ParquetMultiModalDataset(Dataset):
                                 break
                         end_pos += 1
                     
-                    # 为assistant回答部分设置loss mask为1
+                    # 为assistant回答部分设置loss mask为1（排除图像token位置）
                     # 注意：从start_pos开始，因为start_pos是assistant回答的开始
+                    # 参考LLaVA：只计算文本回答部分的损失，不包括图像token
                     for j in range(start_pos, min(end_pos, self.max_length)):
-                        loss_mask[j] = 1
+                        # 只在非图像token位置计算loss
+                        if j not in image_token_positions:
+                            loss_mask[j] = 1
                     
                     i = end_pos if end_pos < len(input_ids) else len(input_ids)
                 else:

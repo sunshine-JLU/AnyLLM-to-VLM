@@ -67,7 +67,32 @@ class MLPProjection(BaseProjection):
         # 第二层：hidden_dim -> language_dim
         layers.append(nn.Linear(self.hidden_dim, self.language_dim))
         
-        return nn.Sequential(*layers)
+        projection = nn.Sequential(*layers)
+        
+        # LLaVA风格的初始化：使用小尺度初始化，让投影层初始时接近恒等映射
+        # 这有助于更好地利用预训练的视觉编码器，减少训练初期的不稳定
+        self._apply_llava_init(projection)
+        
+        return projection
+    
+    def _apply_llava_init(self, projection: nn.Module):
+        """
+        应用LLaVA风格的初始化
+        参考：https://github.com/haotian-liu/LLaVA/blob/main/llava/model/multimodal_projector.py
+        """
+        # 获取所有线性层
+        linear_layers = [module for module in projection.modules() if isinstance(module, nn.Linear)]
+        
+        if len(linear_layers) >= 2:
+            # 第一层：使用小的标准正态分布初始化
+            nn.init.normal_(linear_layers[0].weight, std=0.02)
+            if linear_layers[0].bias is not None:
+                nn.init.zeros_(linear_layers[0].bias)
+            
+            # 最后一层：使用更小的初始化，让输出接近零（相当于初始时接近恒等映射的效果）
+            nn.init.normal_(linear_layers[-1].weight, std=0.01)
+            if linear_layers[-1].bias is not None:
+                nn.init.zeros_(linear_layers[-1].bias)
     
     def forward(self, image_embeddings: torch.Tensor) -> torch.Tensor:
         """

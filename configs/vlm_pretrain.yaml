@@ -33,7 +33,9 @@ training:
   stage: "pretrain"
   batch_size: 40
   num_epochs: 1
-  learning_rate: 4e-4
+  # 参考LLaVA：预训练阶段学习率设置
+  # LLaVA通常使用2e-3，但如果遇到训练不稳定或幻觉严重，可以降低到1e-3或5e-4
+  learning_rate: 1e-3  # 使用中等学习率，平衡训练速度和稳定性
   warmup_steps: 1000
   weight_decay: 0.01
   grad_clip: 1.0
