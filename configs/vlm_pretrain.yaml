@@ -9,7 +9,7 @@ model:
   freeze_language_model: false
   language_layers_to_unfreeze: 2  # 解冻后2层transformer层进行训练，设置为0则只训练投影层、embedding和输出层
   
-  projection_type: "mlp"
+  projection_type: "deep_mlp"  # 使用深层MLP
   projection_hidden_dim: 3072
   projection_activation: "gelu"
   projection_dropout: 0.1
