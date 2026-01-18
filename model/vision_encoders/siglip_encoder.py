@@ -87,10 +87,13 @@ class SigLIPVisionEncoder(BaseVisionEncoder):
         with torch.no_grad() if self.freeze else torch.enable_grad():
             outputs = self.model(pixel_values=pixel_values)
         
-        # 使用patch embeddings（去掉CLS token）
-        # SigLIP ViT的输出格式: [batch_size, num_patches+1, hidden_size]
-        # 第一个token是CLS token，我们去掉它
-        img_embedding = outputs.last_hidden_state[:, 1:, :]  # [batch_size, num_patches, hidden_size]
+        # SigLIP SO400M Patch14-384 没有 class token
+        # 输出格式: [batch_size, num_patches, hidden_size] (对于384x384输入，num_patches = 729)
+        # 直接使用全部输出，不需要去掉第一个token
+        img_embedding = outputs.last_hidden_state  # [batch_size, num_patches, hidden_size]
+        
+        # 验证：检查输出形状是否符合预期（可选）
+        # 对于384x384输入，patch size 14，应该有 (384//14)**2 = 729 个patches
         return img_embedding
     
     def _get_hidden_size(self) -> int:
