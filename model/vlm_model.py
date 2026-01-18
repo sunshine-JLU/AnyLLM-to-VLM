@@ -598,62 +598,93 @@ class MultiModalVLM(nn.Module):
     ):
         """带视觉信息的生成方法"""
         from torch.nn.functional import softmax
+        import sys
         
         self.eval()
         generated_ids = input_ids.clone()
         
+        # 获取结束token ID
+        tokenizer = self.get_tokenizer()
+        eos_token_id = tokenizer.eos_token_id if tokenizer.eos_token_id is not None else tokenizer.pad_token_id
+        
+        # 初始化attention mask
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
+        
+        # 打印进度信息的阈值（每N个token打印一次）
+        print_interval = max(1, max_new_tokens // 20)  # 大约每5%打印一次
+        
         with torch.no_grad():
-            for _ in range(max_new_tokens):
-                # 前向传播
-                outputs = self.forward(
-                    input_ids=generated_ids,
-                    pixel_values=pixel_values,
-                    attention_mask=attention_mask
-                )
-                
-                # 获取下一个token的logits
-                next_token_logits = outputs.logits[:, -1, :]
-                
-                # 应用采样策略
-                if do_sample:
-                    if temperature > 0:
-                        next_token_logits = next_token_logits / temperature
+            for step in range(max_new_tokens):
+                try:
+                    # 前向传播
+                    outputs = self.forward(
+                        input_ids=generated_ids,
+                        pixel_values=pixel_values,
+                        attention_mask=attention_mask
+                    )
                     
-                    # Top-p采样
-                    if top_p < 1.0:
-                        sorted_logits, sorted_indices = torch.sort(next_token_logits, descending=True)
-                        cumulative_probs = torch.cumsum(softmax(sorted_logits, dim=-1), dim=-1)
-                        
-                        # 移除累积概率超过top_p的tokens
-                        sorted_indices_to_remove = cumulative_probs > top_p
-                        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                        sorted_indices_to_remove[..., 0] = 0
-                        
-                        indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
-                        next_token_logits[indices_to_remove] = float('-inf')
+                    # 获取下一个token的logits
+                    next_token_logits = outputs.logits[:, -1, :]
                     
-                    probs = softmax(next_token_logits, dim=-1)
-                    next_token = torch.multinomial(probs, num_samples=1)
-                else:
-                    # 贪婪解码
-                    next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
-                
-                # 添加到生成的序列
-                generated_ids = torch.cat([generated_ids, next_token], dim=1)
-                
-                # 更新attention mask
-                if attention_mask is not None:
+                    # 清理outputs以节省内存
+                    del outputs
+                    
+                    # 应用采样策略
+                    if do_sample:
+                        if temperature > 0:
+                            next_token_logits = next_token_logits / temperature
+                        
+                        # Top-p采样
+                        if top_p < 1.0:
+                            sorted_logits, sorted_indices = torch.sort(next_token_logits, descending=True)
+                            cumulative_probs = torch.cumsum(softmax(sorted_logits, dim=-1), dim=-1)
+                            
+                            # 移除累积概率超过top_p的tokens
+                            sorted_indices_to_remove = cumulative_probs > top_p
+                            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                            sorted_indices_to_remove[..., 0] = 0
+                            
+                            indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                            next_token_logits[indices_to_remove] = float('-inf')
+                        
+                        probs = softmax(next_token_logits, dim=-1)
+                        next_token = torch.multinomial(probs, num_samples=1)
+                    else:
+                        # 贪婪解码
+                        next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+                    
+                    # 清理中间变量
+                    del next_token_logits
+                    if do_sample and top_p < 1.0:
+                        del sorted_logits, sorted_indices, cumulative_probs, sorted_indices_to_remove, indices_to_remove
+                    if do_sample:
+                        del probs
+                    
+                    # 添加到生成的序列
+                    generated_ids = torch.cat([generated_ids, next_token], dim=1)
+                    
+                    # 更新attention mask
                     attention_mask = torch.cat([
                         attention_mask,
                         torch.ones((attention_mask.size(0), 1), device=attention_mask.device, dtype=attention_mask.dtype)
                     ], dim=1)
-                else:
-                    attention_mask = torch.ones_like(generated_ids)
-                
-                # 检查是否到达结束token
-                tokenizer = self.get_tokenizer()
-                eos_token_id = tokenizer.eos_token_id if tokenizer.eos_token_id is not None else tokenizer.pad_token_id
-                if next_token.item() == eos_token_id:
+                    
+                    # 打印进度
+                    if (step + 1) % print_interval == 0 or step == 0:
+                        print(f"    生成进度: {step + 1}/{max_new_tokens} tokens", flush=True)
+                    
+                    # 检查是否到达结束token
+                    if next_token.item() == eos_token_id:
+                        print(f"    遇到结束token，停止生成 (已生成 {step + 1} tokens)", flush=True)
+                        break
+                    
+                except Exception as e:
+                    print(f"\n  生成过程中出错 (在 token {step + 1}): {e}", flush=True)
+                    import traceback
+                    traceback.print_exc()
+                    # 返回已生成的部分
                     break
         
+        print(f"    生成完成，共生成 {generated_ids.size(1) - input_ids.size(1)} tokens", flush=True)
         return generated_ids

@@ -572,24 +572,124 @@ class VLMTrainer:
         
         # 加载模型状态
         model_to_load = self.model.module if self.is_distributed else self.model
-        model_to_load.load_state_dict(checkpoint['model_state_dict'])
+        checkpoint_state_dict = checkpoint['model_state_dict']
+        model_state_dict = model_to_load.state_dict()
         
-        # 加载优化器和调度器
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        if self.scheduler is not None and checkpoint['scheduler_state_dict'] is not None:
-            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        # 智能加载：处理LoRA参数形状不匹配的情况
+        missing_keys = []
+        unexpected_keys = []
+        shape_mismatch_keys = []
         
-        # 加载scaler
-        if self.scaler is not None and 'scaler_state_dict' in checkpoint:
-            self.scaler.load_state_dict(checkpoint['scaler_state_dict'])
+        # 分离LoRA参数和其他参数
+        lora_keys = [k for k in checkpoint_state_dict.keys() if 'lora' in k.lower()]
+        non_lora_keys = [k for k in checkpoint_state_dict.keys() if 'lora' not in k.lower()]
         
-        # 恢复训练状态
-        self.current_epoch = checkpoint['epoch']
-        self.global_step = checkpoint.get('global_step', 0)
-        self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+        # 先加载非LoRA参数（使用strict=False允许部分不匹配）
+        filtered_state_dict = {}
+        for key in non_lora_keys:
+            if key in model_state_dict:
+                if model_state_dict[key].shape == checkpoint_state_dict[key].shape:
+                    filtered_state_dict[key] = checkpoint_state_dict[key]
+                else:
+                    shape_mismatch_keys.append(key)
+                    if self._is_main_process():
+                        print(f"  跳过形状不匹配的参数: {key} "
+                              f"(检查点: {checkpoint_state_dict[key].shape}, "
+                              f"当前模型: {model_state_dict[key].shape})")
+            else:
+                unexpected_keys.append(key)
+        
+        # 检查当前模型是否使用LoRA
+        model_has_lora = any('lora' in k.lower() for k in model_state_dict.keys())
+        checkpoint_has_lora = len(lora_keys) > 0
+        
+        # 处理LoRA参数：只加载形状匹配的
+        if model_has_lora and checkpoint_has_lora:
+            # 如果当前模型和检查点都有LoRA，尝试加载匹配的参数
+            for key in lora_keys:
+                if key in model_state_dict:
+                    if model_state_dict[key].shape == checkpoint_state_dict[key].shape:
+                        filtered_state_dict[key] = checkpoint_state_dict[key]
+                    else:
+                        shape_mismatch_keys.append(key)
+                        if self._is_main_process():
+                            print(f"  跳过LoRA参数形状不匹配: {key} "
+                                  f"(检查点: {checkpoint_state_dict[key].shape}, "
+                                  f"当前模型: {model_state_dict[key].shape})")
+        elif checkpoint_has_lora and not model_has_lora:
+            # 如果检查点有LoRA但当前模型没有，跳过所有LoRA参数
+            if self._is_main_process():
+                print(f"  检查点包含LoRA参数，但当前模型未使用LoRA，跳过所有LoRA参数")
+            shape_mismatch_keys.extend(lora_keys)
+        elif model_has_lora and not checkpoint_has_lora:
+            # 如果当前模型有LoRA但检查点没有，这是正常的（可能从非LoRA检查点加载）
+            if self._is_main_process():
+                print(f"  当前模型使用LoRA，但检查点不包含LoRA参数，将使用随机初始化的LoRA参数")
+        
+        # 检查缺失的键
+        for key in model_state_dict.keys():
+            if key not in checkpoint_state_dict:
+                missing_keys.append(key)
+        
+        # 加载过滤后的状态字典
+        load_result = model_to_load.load_state_dict(filtered_state_dict, strict=False)
         
         if self._is_main_process():
             print(f"从检查点恢复: {checkpoint_path}")
+            if load_result.missing_keys:
+                print(f"  缺失的键 ({len(load_result.missing_keys)}): {load_result.missing_keys[:5]}...")
+            if load_result.unexpected_keys:
+                print(f"  意外的键 ({len(load_result.unexpected_keys)}): {load_result.unexpected_keys[:5]}...")
+            if shape_mismatch_keys:
+                print(f"  形状不匹配的键 ({len(shape_mismatch_keys)}): 已跳过")
+                if len(shape_mismatch_keys) <= 10:
+                    for key in shape_mismatch_keys:
+                        print(f"    - {key}")
+        
+        # 加载优化器和调度器（如果形状匹配）
+        try:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        except Exception as e:
+            if self._is_main_process():
+                print(f"  警告: 无法加载优化器状态: {e}")
+                print(f"  将使用新的优化器状态")
+        
+        if self.scheduler is not None and checkpoint.get('scheduler_state_dict') is not None:
+            try:
+                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            except Exception as e:
+                if self._is_main_process():
+                    print(f"  警告: 无法加载调度器状态: {e}")
+        
+        # 加载scaler
+        if self.scaler is not None and 'scaler_state_dict' in checkpoint:
+            try:
+                self.scaler.load_state_dict(checkpoint['scaler_state_dict'])
+            except Exception as e:
+                if self._is_main_process():
+                    print(f"  警告: 无法加载scaler状态: {e}")
+        
+        # 恢复训练状态（但如果是不同阶段的检查点，重置epoch）
+        checkpoint_epoch = checkpoint.get('epoch', 0)
+        # 如果是从预训练检查点加载到SFT，重置epoch
+        if 'config' in checkpoint and checkpoint['config'] is not None:
+            checkpoint_config = checkpoint['config']
+            checkpoint_stage = getattr(checkpoint_config, 'stage', None) if hasattr(checkpoint_config, 'stage') else None
+            if checkpoint_stage is not None and checkpoint_stage != self.config.stage:
+                if self._is_main_process():
+                    print(f"  检测到阶段变化: {checkpoint_stage} -> {self.config.stage}，重置epoch")
+                self.current_epoch = 0
+                self.global_step = 0
+            else:
+                self.current_epoch = checkpoint_epoch
+                self.global_step = checkpoint.get('global_step', 0)
+        else:
+            self.current_epoch = checkpoint_epoch
+            self.global_step = checkpoint.get('global_step', 0)
+        
+        self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+        
+        if self._is_main_process():
             print(f"  恢复epoch: {self.current_epoch}")
             print(f"  恢复step: {self.global_step}")
             print(f"  最佳验证损失: {self.best_val_loss:.4f}")

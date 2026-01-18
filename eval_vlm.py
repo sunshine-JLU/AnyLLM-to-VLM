@@ -138,45 +138,58 @@ def generate_response(model, image_path: str, question: str, max_new_tokens=512,
     print(f"  图像: {image_path}")
     print(f"  问题: {question}")
     
-    # 加载图像
-    image = Image.open(image_path).convert('RGB')
-    processor = model.get_processor()
-    tokenizer = model.get_tokenizer()
-    
-    # 处理图像
-    pixel_values = processor(images=image, return_tensors='pt')['pixel_values'].to(device)
-    
-    # 构建prompt
-    image_special_token = model.config.image_special_token
-    prompt = f"<|im_start|>user\n{question}\n{image_special_token}<|im_end|>\n<|im_start|>assistant\n"
-    
-    # Tokenize
-    input_ids = tokenizer.encode(prompt, return_tensors='pt').to(device)
-    
-    # 生成
-    model.eval()
-    with torch.no_grad():
-        outputs = model.generate(
-            input_ids=input_ids,
-            pixel_values=pixel_values,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=0.7,
-            top_p=0.9,
-            pad_token_id=tokenizer.pad_token_id
-        )
-    
-    # 解码
-    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=False)
-    
-    # 提取回答部分
-    if "<|im_start|>assistant" in generated_text:
-        answer = generated_text.split("<|im_start|>assistant")[-1].split("<|im_end|>")[0].strip()
-    else:
-        answer = generated_text[len(prompt):].strip()
-    
-    print(f"  回答: {answer}")
-    return answer
+    try:
+        # 加载图像
+        print("  正在加载图像...")
+        image = Image.open(image_path).convert('RGB')
+        processor = model.get_processor()
+        tokenizer = model.get_tokenizer()
+        
+        # 处理图像
+        print("  正在处理图像...")
+        pixel_values = processor(images=image, return_tensors='pt')['pixel_values'].to(device)
+        
+        # 构建prompt
+        image_special_token = model.config.image_special_token
+        prompt = f"<|im_start|>user\n{question}\n{image_special_token}<|im_end|>\n<|im_start|>assistant\n"
+        
+        # Tokenize
+        print("  正在编码prompt...")
+        input_ids = tokenizer.encode(prompt, return_tensors='pt').to(device)
+        
+        # 生成
+        print(f"  开始生成文本 (最大 {max_new_tokens} tokens, 设备: {device})...")
+        print("  注意: CPU生成可能较慢，请耐心等待...")
+        model.eval()
+        with torch.no_grad():
+            outputs = model.generate(
+                input_ids=input_ids,
+                pixel_values=pixel_values,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9,
+                pad_token_id=tokenizer.pad_token_id
+            )
+        
+        # 解码
+        print("  正在解码生成的文本...")
+        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=False)
+        
+        # 提取回答部分
+        if "<|im_start|>assistant" in generated_text:
+            answer = generated_text.split("<|im_start|>assistant")[-1].split("<|im_end|>")[0].strip()
+        else:
+            answer = generated_text[len(prompt):].strip()
+        
+        print(f"  回答: {answer}")
+        return answer
+    except Exception as e:
+        import traceback
+        print(f"  生成过程中出错: {e}")
+        print(f"  错误详情:")
+        traceback.print_exc()
+        raise
 
 
 def batch_generate_eval(model, eval_data_path: str, output_path: str, max_new_tokens=512, device="cuda"):
