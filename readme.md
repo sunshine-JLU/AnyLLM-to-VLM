@@ -50,10 +50,10 @@ Follow these steps to get started quickly [Test SoftWare Environment : Python >=
 
 5. **Run the Supervised Fine-Tuning Script**
    ```bash
-   python train_vlm.py --config configs/vlm_sft.yaml --stage sft
+   python train_vlm.py --config configs/vlm_sft.yaml --resume ./checkpoints/pretrain/checkpoint_epoch1.pt --stage sft
    # 使用4张GPU训练 
-   # torchrun --nproc_per_node=4 train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log      
-   # python train_vlm.py --config configs/vlm_sft.yaml --stage sft | tee sft.log
+   # torchrun --nproc_per_node=4 train_vlm.py --config configs/vlm_sft.yaml --resume ./checkpoints/pretrain/checkpoint_epoch1.pt --stage sft | tee sft.log      
+   # python train_vlm.py --config configs/vlm_sft.yaml --resume ./checkpoints/pretrain/checkpoint_epoch1.pt --stage sft | tee sft.log
 6. **Eval the model**
    ```bash
    python eval_vlm.py --checkpoint ./checkpoints/sft/checkpoint_epoch1.pt --config configs/vlm_sft.yaml --mode generate --image ./sample.jpg --question "描述这张图片" --max_new_tokens 50
