@@ -1,7 +1,7 @@
 # 模型配置
 model:
-  vision_model_type: "siglip"
-  vision_model_path: "./models/siglip-so400m-patch14-384"  # 
+  vision_model_type: "clip"
+  vision_model_path: "./models/clip-vit-base-patch16"  # 
   freeze_vision_encoder: true
   vision_layers_to_unfreeze: 0
   
@@ -16,7 +16,7 @@ model:
   projection_dropout: 0.1
   projection_layernorm: true
   
-  image_special_token: "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+  image_special_token: "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
   image_token_ids: null
   
   vision_processor_type: "patch_insert"  # 'patch_insert' (直接插入所有patch) 或 'mean_pooling' (平均pooling后插入)
@@ -53,5 +53,13 @@ training:
   log_every_n_steps: 50
   eval_every_n_steps: 200
   
-  use_ddp: false
+  # 分布式训练配置
+  use_ddp: false  # 使用DDP（Distributed Data Parallel）
+  use_fsdp: false  # 使用FSDP（Fully Sharded Data Parallel），可以更有效地利用显存
+  # FSDP配置（仅在use_fsdp=true时生效）
+  fsdp_sharding_strategy: "FULL_SHARD"  # "FULL_SHARD", "SHARD_GRAD_OP", "NO_SHARD", "HYBRID_SHARD"
+  fsdp_cpu_offload: false  # 是否将参数offload到CPU（可以进一步节省显存，但会降低速度）
+  fsdp_sync_module_states: true  # 是否同步模块状态
+  fsdp_forward_prefetch: false  # 是否启用前向预取（可以加速，但可能增加显存）
+  fsdp_use_orig_params: true  # 使用原始参数（推荐，与混合精度兼容）
   num_workers: 2

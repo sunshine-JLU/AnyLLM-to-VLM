@@ -15,6 +15,30 @@ import matplotlib
 matplotlib.use('Agg')  # 使用非交互式后端，适合服务器环境
 import matplotlib.pyplot as plt
 
+# FSDP相关导入
+try:
+    from torch.distributed.fsdp import (
+        FullyShardedDataParallel as FSDP,
+        MixedPrecision,
+        ShardingStrategy,
+        StateDictType,
+        FullStateDictConfig,
+    )
+    from torch.distributed.fsdp.wrap import (
+        transformer_auto_wrap_policy,
+        size_based_auto_wrap_policy,
+    )
+    FSDP_AVAILABLE = True
+except ImportError:
+    FSDP_AVAILABLE = False
+    FSDP = None
+    MixedPrecision = None
+    ShardingStrategy = None
+    StateDictType = None
+    FullStateDictConfig = None
+    if dist.is_available():
+        print("警告: FSDP不可用，将使用DDP。需要PyTorch >= 1.12.0")
+
 from data.parquet_dataset import ParquetMultiModalDataset, DataCollator
 from model.vlm_model import MultiModalVLM
 from config import TrainingConfig
@@ -45,7 +69,8 @@ class VLMTrainer:
         self.model.to(self.device)
         
         # 分布式训练
-        self.is_distributed = config.use_ddp and dist.is_initialized()
+        self.is_distributed = (config.use_ddp or config.use_fsdp) and dist.is_initialized()
+        self.use_fsdp = config.use_fsdp and FSDP_AVAILABLE and dist.is_initialized()
         
         # 打印设备信息
         if self._is_main_process():
@@ -55,8 +80,15 @@ class VLMTrainer:
                 print(f"验证样本数: {len(val_dataset)}")
             if self.is_distributed:
                 print(f"使用分布式训练，world size: {dist.get_world_size()}")
+                if self.use_fsdp:
+                    print(f"使用FSDP (Fully Sharded Data Parallel)")
+                elif config.use_ddp:
+                    print(f"使用DDP (Distributed Data Parallel)")
         
-        if self.is_distributed:
+        # 初始化分布式训练（FSDP或DDP）
+        if self.use_fsdp:
+            self._setup_fsdp(config)
+        elif self.is_distributed and config.use_ddp:
             print(f"初始化分布式数据并行...")
             self.model = nn.parallel.DistributedDataParallel(
                 model,
@@ -87,35 +119,42 @@ class VLMTrainer:
             if self._is_main_process():
                 print(f"使用Float32训练 (无混合精度)")
         
-        # 获取可训练参数
-        trainable_params = []
-        total_params = 0
-        trainable_params_count = 0
-        
-        # 获取模型参数
-        model_to_check = self.model.module if self.is_distributed else self.model
-        for name, param in model_to_check.named_parameters():
-            total_params += param.numel()
-            if param.requires_grad:
-                trainable_params.append(param)
-                trainable_params_count += param.numel()
-        
-        if self._is_main_process():
-            print(f"总参数: {total_params:,}")
-            print(f"可训练参数: {trainable_params_count:,}")
-            print(f"可训练比例: {trainable_params_count/total_params*100:.2f}%")
-        
-        # 优化器 - 确保学习率是浮点数
-        lr = float(config.learning_rate)
-        weight_decay = float(config.weight_decay)
-        
-        self.optimizer = AdamW(
-            trainable_params,
-            lr=lr,
-            weight_decay=weight_decay,
-            eps=1e-8,
-            fused=True if torch.cuda.is_available() else False  # 使用fused优化器加速
-        )
+        # 获取可训练参数（FSDP需要在包装后获取参数）
+        if not self.use_fsdp:
+            trainable_params = []
+            total_params = 0
+            trainable_params_count = 0
+            
+            # 获取模型参数
+            model_to_check = self.model.module if self.is_distributed else self.model
+            for name, param in model_to_check.named_parameters():
+                total_params += param.numel()
+                if param.requires_grad:
+                    trainable_params.append(param)
+                    trainable_params_count += param.numel()
+            
+            if self._is_main_process():
+                print(f"总参数: {total_params:,}")
+                print(f"可训练参数: {trainable_params_count:,}")
+                print(f"可训练比例: {trainable_params_count/total_params*100:.2f}%")
+            
+            # 优化器 - 确保学习率是浮点数
+            lr = float(config.learning_rate)
+            weight_decay = float(config.weight_decay)
+            
+            self.optimizer = AdamW(
+                trainable_params,
+                lr=lr,
+                weight_decay=weight_decay,
+                eps=1e-8,
+                fused=True if torch.cuda.is_available() else False  # 使用fused优化器加速
+            )
+        else:
+            # FSDP模式下，优化器在FSDP包装后创建
+            # 先打印参数统计
+            self._print_model_params()
+            # 优化器将在_setup_fsdp后创建
+            self.optimizer = None
         
         # 学习率调度器
         total_batches = len(train_dataset) // max(1, config.batch_size)
@@ -206,6 +245,113 @@ class VLMTrainer:
             print("训练器初始化完成")
             print(f"每个epoch步数: {len(self.train_loader)}")
             print(f"总训练步数: {self.total_steps}")
+    
+    def _setup_fsdp(self, config):
+        """设置FSDP"""
+        if not FSDP_AVAILABLE:
+            raise RuntimeError("FSDP不可用，需要PyTorch >= 1.12.0")
+        
+        if self._is_main_process():
+            print("初始化FSDP (Fully Sharded Data Parallel)...")
+        
+        # 配置sharding策略
+        sharding_strategy_map = {
+            "FULL_SHARD": ShardingStrategy.FULL_SHARD,
+            "SHARD_GRAD_OP": ShardingStrategy.SHARD_GRAD_OP,
+            "NO_SHARD": ShardingStrategy.NO_SHARD,
+            "HYBRID_SHARD": ShardingStrategy.HYBRID_SHARD,
+        }
+        sharding_strategy = sharding_strategy_map.get(
+            config.fsdp_sharding_strategy.upper(),
+            ShardingStrategy.FULL_SHARD
+        )
+        
+        # 配置混合精度
+        mixed_precision_policy = None
+        if self.use_amp:
+            if self.dtype == torch.bfloat16:
+                mixed_precision_policy = MixedPrecision(
+                    param_dtype=torch.bfloat16,
+                    reduce_dtype=torch.bfloat16,
+                    buffer_dtype=torch.bfloat16,
+                )
+            elif self.dtype == torch.float16:
+                mixed_precision_policy = MixedPrecision(
+                    param_dtype=torch.float16,
+                    reduce_dtype=torch.float16,
+                    buffer_dtype=torch.float16,
+                )
+        
+        # CPU offload配置
+        cpu_offload = None
+        if config.fsdp_cpu_offload:
+            from torch.distributed.fsdp import CPUOffload
+            cpu_offload = CPUOffload(offload_params=True)
+        
+        # 自动包装策略：使用transformer层作为包装单元
+        # 对于VLM模型，我们使用size_based策略，或者手动指定关键模块
+        auto_wrap_policy = None
+        # 可以尝试使用transformer_auto_wrap_policy，但需要知道模型结构
+        # 这里使用size_based策略，每个模块至少1M参数才包装
+        auto_wrap_policy = size_based_auto_wrap_policy(min_num_params=1_000_000)
+        
+        # 包装模型
+        self.model = FSDP(
+            self.model,
+            sharding_strategy=sharding_strategy,
+            mixed_precision=mixed_precision_policy,
+            cpu_offload=cpu_offload,
+            auto_wrap_policy=auto_wrap_policy,
+            sync_module_states=config.fsdp_sync_module_states,
+            forward_prefetch=config.fsdp_forward_prefetch,
+            use_orig_params=config.fsdp_use_orig_params,
+            device_id=config.local_rank,
+        )
+        
+        # FSDP包装后创建优化器
+        lr = float(config.learning_rate)
+        weight_decay = float(config.weight_decay)
+        
+        # 获取可训练参数（FSDP会自动处理）
+        trainable_params = [p for p in self.model.parameters() if p.requires_grad]
+        
+        self.optimizer = AdamW(
+            trainable_params,
+            lr=lr,
+            weight_decay=weight_decay,
+            eps=1e-8,
+            fused=True if torch.cuda.is_available() else False
+        )
+        
+        if self._is_main_process():
+            print(f"FSDP初始化完成")
+            print(f"  Sharding策略: {config.fsdp_sharding_strategy}")
+            print(f"  CPU Offload: {config.fsdp_cpu_offload}")
+            print(f"  Forward Prefetch: {config.fsdp_forward_prefetch}")
+            print(f"  Use Orig Params: {config.fsdp_use_orig_params}")
+    
+    def _print_model_params(self):
+        """打印模型参数统计（用于FSDP）"""
+        if not self._is_main_process():
+            return
+        
+        total_params = 0
+        trainable_params = 0
+        
+        # 对于FSDP，需要先获取完整模型
+        model_to_check = self.model
+        if hasattr(self.model, 'module'):
+            model_to_check = self.model.module
+        
+        for name, param in model_to_check.named_parameters():
+            total_params += param.numel()
+            if param.requires_grad:
+                trainable_params += param.numel()
+        
+        print(f"总参数: {total_params:,}")
+        print(f"可训练参数: {trainable_params:,}")
+        if total_params > 0:
+            print(f"可训练比例: {trainable_params/total_params*100:.2f}%")
     
     def _is_main_process(self) -> bool:
         """判断是否是主进程"""
@@ -307,10 +453,14 @@ class VLMTrainer:
                     if self.scaler is not None:
                         self.scaler.unscale_(self.optimizer)
                     
-                    torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(),
-                        self.config.grad_clip
-                    )
+                    # FSDP的梯度裁剪需要特殊处理
+                    if self.use_fsdp and FSDP_AVAILABLE:
+                        FSDP.clip_grad_norm_(self.model, self.config.grad_clip)
+                    else:
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(),
+                            self.config.grad_clip
+                        )
                     
                     # 更新参数
                     if self.scaler is not None:
@@ -530,16 +680,28 @@ class VLMTrainer:
             return
         
         # 准备检查点数据
-        model_to_save = self.model.module if self.is_distributed else self.model
+        if self.use_fsdp:
+            # FSDP需要特殊处理：使用state_dict_type来保存完整状态
+            with FSDP.state_dict_type(
+                self.model,
+                StateDictType.FULL_STATE_DICT,
+                FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            ):
+                model_state_dict = self.model.state_dict()
+        else:
+            model_to_save = self.model.module if self.is_distributed else self.model
+            model_state_dict = model_to_save.state_dict()
+        
         checkpoint = {
             'epoch': epoch,
             'step': step,
             'global_step': self.global_step,
-            'model_state_dict': model_to_save.state_dict(),
+            'model_state_dict': model_state_dict,
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict() if self.scheduler else None,
             'config': self.config,
-            'best_val_loss': self.best_val_loss
+            'best_val_loss': self.best_val_loss,
+            'use_fsdp': self.use_fsdp  # 标记是否使用FSDP
         }
         
         if self.scaler is not None:
@@ -570,10 +732,35 @@ class VLMTrainer:
         # 使用 weights_only=False 以支持包含自定义类的检查点（PyTorch 2.6+ 默认需要）
         checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         
+        # 检查checkpoint是否使用FSDP保存
+        checkpoint_use_fsdp = checkpoint.get('use_fsdp', False)
+        
         # 加载模型状态
-        model_to_load = self.model.module if self.is_distributed else self.model
-        checkpoint_state_dict = checkpoint['model_state_dict']
-        model_state_dict = model_to_load.state_dict()
+        if self.use_fsdp:
+            # FSDP加载需要特殊处理
+            if checkpoint_use_fsdp:
+                # 如果checkpoint也是FSDP保存的，使用FSDP的加载方式
+                with FSDP.state_dict_type(
+                    self.model,
+                    StateDictType.FULL_STATE_DICT,
+                    FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+                ):
+                    model_state_dict = self.model.state_dict()
+                    checkpoint_state_dict = checkpoint['model_state_dict']
+            else:
+                # 如果checkpoint是DDP或单卡保存的，直接加载
+                checkpoint_state_dict = checkpoint['model_state_dict']
+                # 需要先获取完整模型状态
+                with FSDP.state_dict_type(
+                    self.model,
+                    StateDictType.FULL_STATE_DICT,
+                    FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+                ):
+                    model_state_dict = self.model.state_dict()
+        else:
+            model_to_load = self.model.module if self.is_distributed else self.model
+            checkpoint_state_dict = checkpoint['model_state_dict']
+            model_state_dict = model_to_load.state_dict()
         
         # 智能加载：处理LoRA参数形状不匹配的情况
         missing_keys = []
@@ -632,7 +819,16 @@ class VLMTrainer:
                 missing_keys.append(key)
         
         # 加载过滤后的状态字典
-        load_result = model_to_load.load_state_dict(filtered_state_dict, strict=False)
+        if self.use_fsdp:
+            # FSDP加载需要特殊处理
+            with FSDP.state_dict_type(
+                self.model,
+                StateDictType.FULL_STATE_DICT,
+                FullStateDictConfig(offload_to_cpu=True, rank0_only=True),
+            ):
+                load_result = self.model.load_state_dict(filtered_state_dict, strict=False)
+        else:
+            load_result = model_to_load.load_state_dict(filtered_state_dict, strict=False)
         
         if self._is_main_process():
             print(f"从检查点恢复: {checkpoint_path}")

@@ -192,10 +192,12 @@ def main():
         
         # 分布式训练调整
         if is_distributed:
-            train_config.use_ddp = True
+            # 如果配置了FSDP，使用FSDP；否则使用DDP
+            if not train_config.use_fsdp:
+                train_config.use_ddp = True
             train_config.local_rank = local_rank
             train_config.world_size = world_size
-            # 调整batch size
+            # 调整batch size（FSDP和DDP都需要）
             train_config.batch_size = train_config.batch_size // world_size
         
         if is_main_process:

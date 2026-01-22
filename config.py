@@ -86,6 +86,12 @@ class TrainingConfig:
     
     # 分布式训练
     use_ddp: bool = False
+    use_fsdp: bool = False  # 使用FSDP（Fully Sharded Data Parallel）
+    fsdp_sharding_strategy: str = "FULL_SHARD"  # "FULL_SHARD", "SHARD_GRAD_OP", "NO_SHARD", "HYBRID_SHARD"
+    fsdp_cpu_offload: bool = False  # 是否将参数offload到CPU
+    fsdp_sync_module_states: bool = True  # 是否同步模块状态
+    fsdp_forward_prefetch: bool = False  # 是否启用前向预取
+    fsdp_use_orig_params: bool = True  # 使用原始参数（推荐，与混合精度兼容）
     local_rank: int = 0
     world_size: int = 1
     num_workers: int = 4
